@@ -2,21 +2,19 @@
 
 // Algorithms road map :
 // 1. Each snakes go to closest reachable Energy cell using BFS : For each snakes, 2 snakes can't refers to the same energy cell
-        // Run BFS for each snakes and keep the closest energy
-        // Pick the lowest Snake/Energy couple
-        // Recompute BFS for snakes refering the Energy previously selected
-        // Loop
+// Run BFS for each snakes and keep the closest energy
+// Pick the lowest Snake/Energy couple
+// Recompute BFS for snakes refering the Energy previously selected
+// Loop
 // 2. Fitness function : Score diff + sum (Snake/Energy distances), Evaluate all possible move combinaisons
 // 3. Beam search + Fitness function : Decreasing beam width, start at 3 ^ (3 + 3)
 // 4. Beam search + GA + Fitness function : Select 'beam_width' children with a small GA using fitness function already created
 
-
 #undef _GLIBCXX_DEBUG
 #pragma GCC optimize("Ofast,unroll-loops,omit-frame-pointer,inline")
 #pragma GCC option("arch=native", "tune=native", "no-zero-upper")
-#pragma GCC target(                                                                                \
-    "movbe,aes,pclmul,avx,avx2,f16c,fma,sse3,ssse3,sse4.1,sse4.2,rdrnd,popcnt,bmi,bmi2,lzcnt"      \
-)
+#pragma GCC target( \
+    "movbe,aes,pclmul,avx,avx2,f16c,fma,sse3,ssse3,sse4.1,sse4.2,rdrnd,popcnt,bmi,bmi2,lzcnt")
 
 #include <stdio.h>
 #include <string.h>
@@ -35,7 +33,6 @@ using namespace std;
 
 using Pos = int; // 1 dimension coordinate in map (y * width + x)
 
-
 /* --- MAPPROPERTIES --- */
 
 constexpr int MAX_WIDTH = 45;
@@ -44,18 +41,17 @@ constexpr int MAX_CELL_COUNT = MAX_WIDTH * MAX_HEIGHT;
 
 struct MapProperties
 {
-        int         width;
-        int         height;
-        int         cell_count; // width * height
-        int         my_id;
-        int         opp_id;
-        int         max_snake_count;
-        vector<Pos> adjacent_cells[MAX_CELL_COUNT]; // All valid adjacent cells + the current cell
-                                                    // (N, W, E, S)
+    int width;
+    int height;
+    int cell_count; // width * height
+    int my_id;
+    int opp_id;
+    int max_snake_count;
+    vector<Pos> adjacent_cells[MAX_CELL_COUNT]; // All valid adjacent cells + the current cell
+                                                // (N, W, E, S)
 };
 
 static MapProperties map_properties;
-
 
 /* --- POS --- */
 
@@ -69,37 +65,48 @@ int get_y(const Pos pos) { return pos / MAX_WIDTH; }
 Pos get_pos(const int x, const int y) { return y * MAX_WIDTH + x; }
 Pos get_pos(const Pos pos) { return pos; }
 
-
 /* --- SNAKE --- */
 
 constexpr int MAX_SNAKE_SIZE = 50;
 
 struct Snake
 {
-        int id;
-        int player_id;
-        Pos body_pos[MAX_SNAKE_SIZE];
-        int body_length;
+    int id;
+    int player_id;
+    Pos body_pos[MAX_SNAKE_SIZE];
+    int body_length;
 };
 
 int get_snake_id(Snake *snake) { return snake->id; }
 int get_snake_player_id(Snake *snake) { return snake->player_id; }
 
-int add_body_pos(Snake *snake, Pos pos) { snake->body_pos[snake->body_length++] = pos; }
+void add_body_pos(Snake *snake, Pos pos)
+{
+    // fprintf(stderr, "add_body_pos: idx %d - Pos %d\n", snake->body_length, pos);
+    snake->body_pos[snake->body_length++] = pos;
+    // fprintf(stderr, "add_body_pos: added Pos %d\n", snake->body_pos[snake->body_length - 1]);
+}
 void reset_snake_length(Snake *snake) { snake->body_length = 0; }
 
 void initialize_snake_data(
     Snake *snake,
-    int    snake_id,
-    int    player_id
-)
+    int snake_id,
+    int player_id)
 {
     snake->id = snake_id;
     snake->player_id = player_id;
-    memset(snake->body_pos, 0, sizeof(snake->body_pos));
+    bzero(snake->body_pos, sizeof(Pos) * MAX_SNAKE_SIZE);
     snake->body_length = 3;
 }
 
+void print_snake(Snake *snake)
+{
+    fprintf(stderr, "Snake %d (p=%d) of length %d:\n", snake->id, snake->player_id, snake->body_length);
+    for (int i = 0; i < snake->body_length; i++)
+    {
+        fprintf(stderr, "  %d: (%d, %d)\n", i, get_x(snake->body_pos[i]), get_y(snake->body_pos[i]));
+    }
+}
 
 /* --- ACTION --- */
 
@@ -110,8 +117,8 @@ constexpr int ACTION_DOWN = 4;
 
 struct Action
 {
-        int snake_id;
-        int action_type;         // ACTION_UP | ACTION_LEFT | ACTION_RIGHT | ACTION_DOWN
+    int snake_id;
+    int action_type; // ACTION_UP | ACTION_LEFT | ACTION_RIGHT | ACTION_DOWN
 };
 
 string get_action_string(const Action &action)
@@ -134,7 +141,6 @@ string get_action_string(const Action &action)
     return to_string(action.snake_id) + " " + dir_str;
 }
 
-
 /* --- STATE --- */
 
 constexpr int MAX_SNAKE_COUNT = 8;
@@ -143,31 +149,32 @@ constexpr int MIN_SNAKE_ID = 1;
 
 constexpr int MAX_ACTION_COUNT = 3 ^ MAX_SNAKE_COUNT;
 
-constexpr int CELL_EMPTY = 0;
+constexpr int CELL_EMPTY = 8;
 constexpr int CELL_PLATFORM = 9;
 constexpr int CELL_ENERGY = 10;
 
 struct State
 {
-        int game_points; // Points difference between my id and opponent id
-        int initial_cells[MAX_CELL_COUNT];  // 0: CELL_EMPTY, 1-8: snake_id, 9: CELL_PLATFORM
-        int cells[MAX_CELL_COUNT];          // 0: CELL_EMPTY, 1-8: snake_id, 9: CELL_PLATFORM, 10: CELL_ENERGY
+    int game_points;                   // Points difference between my id and opponent id
+    int initial_cells[MAX_CELL_COUNT]; // 0-7: snake_id, 8: CELL_EMPTY, 9: CELL_PLATFORM
+    int cells[MAX_CELL_COUNT];         // 0-7: snake_id, 8: CELL_EMPTY, 9: CELL_PLATFORM, 10: CELL_ENERGY
 
-        Snake snakes[MIN_SNAKE_ID + MAX_SNAKE_COUNT]; // 1-16: snakes, 0: unused
-        int   alive_snake_count[2];
-        int   alive_snake_ids[2][MAX_PLAYER_SNAKE_COUNT];
+    Snake snakes[MIN_SNAKE_ID + MAX_SNAKE_COUNT]; // 1-16: snakes, 0: unused
+    int alive_snake_count[2];
+    int alive_snake_ids[2][MAX_PLAYER_SNAKE_COUNT];
 
-        Pos energies[MAX_CELL_COUNT];
-        int energy_count;
+    Pos energies[MAX_CELL_COUNT];
+    int energy_count;
 
-        Action actions[MAX_ACTION_COUNT]; // All available actions for one turn
-        int    action_count;  // Number of actions available
+    Action actions[MAX_ACTION_COUNT]; // All available actions for one turn
+    int action_count;                 // Number of actions available
 
-        Action selected_actions[MAX_SNAKE_COUNT];
-        int    selected_actions_count;
-        int    snake_having_played[MIN_SNAKE_ID + MAX_SNAKE_COUNT]; // 0: not played, 1: played
+    Action selected_actions[MAX_SNAKE_COUNT];
+    int selected_actions_count;
+    int snake_having_played[MIN_SNAKE_ID + MAX_SNAKE_COUNT]; // 0: not played, 1: played
 };
 
+int get_cell(State &state, Pos pos) { return state.cells[pos]; }
 Snake *get_snake(State &state, int snake_id) { return &state.snakes[snake_id]; }
 int get_player_alive_snake_count(State &state, int player_id) { return state.alive_snake_count[player_id]; }
 int get_player_alive_snake_id(State &state, int player_id, int index) { return state.alive_snake_ids[player_id][index]; }
@@ -182,18 +189,45 @@ void set_alive_snake_count(State &state, int player_id, int count)
 void set_player_snake_ids(State &state, int player_id, int index, int snake_id)
 {
     state.alive_snake_ids[player_id][index] = snake_id;
+    // fprintf(stderr, "set_player_snake_ids : p %d - idx %d - snakeid %d\n", player_id, index, snake_id);
 }
 
 void initialize_snake_data(
     State &state,
-    int    snake_id,
-    int    player_id
-)
+    int snake_id,
+    int player_id)
 {
     Snake *snake = get_snake(state, snake_id);
     initialize_snake_data(
-        snake, snake_id, player_id
-    );
+        snake, snake_id, player_id);
+}
+
+void print_map(State &state)
+{
+    for (int y = 0; y < map_properties.height; y++)
+    {
+        for (int x = 0; x < map_properties.width; x++)
+        {
+            // Print emojis
+            Pos pos = get_pos(x, y);
+            int cell = get_cell(state, pos);
+            if (cell == CELL_EMPTY)
+                fprintf(stderr, "⬜");
+            else if (cell == CELL_PLATFORM)
+                fprintf(stderr, "🟦");
+            else if (cell == CELL_ENERGY)
+                fprintf(stderr, "🟨");
+            else
+            {
+                Snake *snake = get_snake(state, cell);
+                if (get_snake_player_id(snake) == map_properties.my_id)
+                    fprintf(stderr, "🐍");
+                else
+                    fprintf(stderr, "🐉");
+            }
+        }
+        fprintf(stderr, "\n");
+    }
 }
 
 /* --- TOOL FUNCTIONS --- */
@@ -218,7 +252,6 @@ Pos get_west_pos(const Pos pos) { return pos + WEST_POS_OFFSET; }
 Pos get_east_pos(const Pos pos) { return pos + EAST_POS_OFFSET; }
 Pos get_south_pos(const Pos pos) { return pos + SOUTH_POS_OFFSET; }
 
-
 /* --- PARSING --- */
 
 void parse_initial_inputs(State &state)
@@ -229,30 +262,41 @@ void parse_initial_inputs(State &state)
     cin >> map_properties.width;
     cin >> map_properties.height;
     map_properties.cell_count = map_properties.width * map_properties.height;
-    cin.ignore();
 
-    for (int y = 0; y < map_properties.height; y++) {
+    // fprintf(stderr, "Width/Height : %d/%d\n", map_properties.width, map_properties.height);
+
+    memset(&state, 0, sizeof(state));
+    cin.ignore();
+    for (int y = 0; y < map_properties.height; y++)
+    {
         string row;
         getline(cin, row);
-        for (int x = 0; x < map_properties.width; x++) {
-            if (row[x] == '#') {
+
+        for (int x = 0; x < map_properties.width; x++)
+        {
+            if (row[x] == '.')
+                set_initial_cell(state, x, y, CELL_EMPTY);
+            else if (row[x] == '#')
                 set_initial_cell(state, x, y, CELL_PLATFORM);
-            }
         }
     }
 
     int snakebots_per_player;
     cin >> snakebots_per_player;
+    // fprintf(stderr, "snakebots_per_player : %d\n", snakebots_per_player);
+
     set_alive_snake_count(state, map_properties.my_id, snakebots_per_player);
     set_alive_snake_count(state, map_properties.opp_id, snakebots_per_player);
 
     int snakebot_id;
-    for (int i = 0; i < snakebots_per_player; i++) {
+    for (int i = 0; i < snakebots_per_player; i++)
+    {
         cin >> snakebot_id;
         initialize_snake_data(state, snakebot_id, map_properties.my_id);
         set_player_snake_ids(state, map_properties.my_id, i, snakebot_id);
     }
-    for (int i = 0; i < snakebots_per_player; i++) {
+    for (int i = 0; i < snakebots_per_player; i++)
+    {
         cin >> snakebot_id;
         initialize_snake_data(state, snakebot_id, map_properties.opp_id);
         set_player_snake_ids(state, map_properties.opp_id, i, snakebot_id);
@@ -265,10 +309,12 @@ Pos parse_pos_from_segment(string segment)
     int x = stoi(segment.substr(0, commaPos));
     int y = stoi(segment.substr(commaPos + 1));
 
+    // fprintf(stderr, "parse_pos_from_segment: %d %d\n", x, y);
     return get_pos(x, y);
 }
 
-void parse_snakebot(State &state, int *my_snake_count, int *opp_snake_count, int snakebotId, string bodyStr) {
+void parse_snakebot(State &state, int *my_snake_count, int *opp_snake_count, int snakebotId, string bodyStr)
+{
 
     Snake *snake = get_snake(state, snakebotId);
     int player_id = get_snake_player_id(snake);
@@ -278,7 +324,7 @@ void parse_snakebot(State &state, int *my_snake_count, int *opp_snake_count, int
         snake_count = my_snake_count;
     else
         snake_count = opp_snake_count;
-    
+
     set_player_snake_ids(state, player_id, *snake_count, snakebotId);
     (*snake_count)++;
 
@@ -288,8 +334,10 @@ void parse_snakebot(State &state, int *my_snake_count, int *opp_snake_count, int
     size_t start = 0;
     size_t end = bodyStr.find(':');
 
-    while (end != string::npos) {
+    while (end != string::npos)
+    {
         string segment = bodyStr.substr(start, end - start);
+
         Pos body_pos = parse_pos_from_segment(segment);
         add_body_pos(snake, body_pos);
         set_cell(state, body_pos, snakebotId);
@@ -307,16 +355,17 @@ void parse_snakebot(State &state, int *my_snake_count, int *opp_snake_count, int
 
 void parse_turn_inputs(State &state)
 {
-    memcpy(state.cells, state.initial_cells, MAX_CELL_COUNT);
+    memcpy(state.cells, state.initial_cells, MAX_CELL_COUNT * sizeof(int));
 
     cin >> state.energy_count;
-    for (int i = 0; i < state.energy_count; i++) {
+    for (int i = 0; i < state.energy_count; i++)
+    {
         int x, y;
         cin >> x >> y;
         set_energy(state, i, x, y);
         set_cell(state, state.energies[i], CELL_ENERGY);
     }
-    
+
     state.alive_snake_count[0] = 0;
     state.alive_snake_count[1] = 0;
 
@@ -325,7 +374,8 @@ void parse_turn_inputs(State &state)
 
     int snakebotCount;
     cin >> snakebotCount;
-    for (int i = 0; i < snakebotCount; i++) {
+    for (int i = 0; i < snakebotCount; i++)
+    {
         int snakebotId;
         string bodyStr;
         cin >> snakebotId >> bodyStr;
@@ -340,19 +390,22 @@ void parse_turn_inputs(State &state)
 int main()
 {
     State state;
-    memset(&state, 0, sizeof(state));
-
     parse_initial_inputs(state);
 
-    while (true) {
+    while (true)
+    {
         parse_turn_inputs(state);
+        print_map(state);
 
-        for (int i = 0; i < get_player_alive_snake_count(state, map_properties.my_id); i++) {
+        for (int i = 0; i < get_player_alive_snake_count(state, map_properties.my_id); i++)
+        {
+
             int id = get_player_alive_snake_id(state, map_properties.my_id, i);
+
             cout << id << " UP";
 
             if (i != get_player_alive_snake_count(state, map_properties.my_id) - 1)
-                cout << "; ";
+                cout << ";";
         }
         cout << endl;
     }
