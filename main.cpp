@@ -1,14 +1,18 @@
-// Version 0.1
+// Version 1.0
 
 // Algorithms road map :
-// 1. Each snakes go to closest reachable Energy cell using BFS : For each snakes, 2 snakes can't refers to the same energy cell
-// Run BFS for each snakes and keep the closest energy
-// Pick the lowest Snake/Energy couple
-// Recompute BFS for snakes refering the Energy previously selected
-// Loop
-// 2. Fitness function : Score diff + sum (Snake/Energy distances), Evaluate all possible move combinaisons
-// 3. Beam search + Fitness function : Decreasing beam width, start at 3 ^ (3 + 3)
-// 4. Beam search + GA + Fitness function : Select 'beam_width' children with a small GA using fitness function already created
+// v1 - Each snakes go to closest Energy cell using BFS
+// v2 - Same as version 1 but 2 snakes can't refers to the same energy cell
+//          Run BFS for each snakes and keep the closest energy
+//          Pick the lowest Snake/Energy couple
+//          Recompute BFS for snakes refering the Energy previously selected
+//          Loop
+// v3 - Evaluate snake moves independently using a fitness function : Score diff + sum (Snake/Energy distances)
+// v4 - Evaluate all possible move combinaisons using a fitness function and physics simulation
+// v5 - Beam search + Fitness function : Decreasing beam width, start at 3 ^ (3 + 3)
+// v6 - Beam search + GA + Fitness function : Select 'beam_width' children with a small GA using fitness function already created
+
+// No need to include physics in fitness function, tree iterations will take care of possible/impossible paths
 
 #undef _GLIBCXX_DEBUG
 #pragma GCC optimize("Ofast,unroll-loops,omit-frame-pointer,inline")
@@ -79,6 +83,8 @@ struct Snake
 
 int get_snake_id(Snake *snake) { return snake->id; }
 int get_snake_player_id(Snake *snake) { return snake->player_id; }
+int get_snake_body_pos(Snake *snake, int index) { return snake->body_pos[index]; }
+int get_snake_pos(Snake *snake) { return get_snake_body_pos(snake, 0); }
 
 void add_body_pos(Snake *snake, Pos pos)
 {
@@ -202,6 +208,8 @@ void initialize_snake_data(
         snake, snake_id, player_id);
 }
 
+int find_closest_energy_cell(State &state, Pos start_pos, Pos &closest_energy_cell_pos);
+
 void print_map(State &state)
 {
     for (int y = 0; y < map_properties.height; y++)
@@ -230,6 +238,40 @@ void print_map(State &state)
     }
 }
 
+void print_map_ascii(State &state)
+{
+    Pos closest = -1;
+
+    // int test = find_closest_energy_cell(state, 0, closest);
+    // fprintf(stderr, "BFS result: %d | (%d, %d)\n", test, get_x(closest), get_y(closest));
+
+    for (int y = 0; y < map_properties.height; y++)
+    {
+        for (int x = 0; x < map_properties.width; x++)
+        {
+            // Print emojis
+            Pos pos = get_pos(x, y);
+            int cell = get_cell(state, pos);
+            if (cell == CELL_EMPTY)
+            {
+                int dist = find_closest_energy_cell(state, pos, closest);
+                fprintf(stderr, "%d ", dist);
+            }
+            else if (cell == CELL_PLATFORM)
+                fprintf(stderr, "# ");
+            else if (cell == CELL_ENERGY)
+                fprintf(stderr, "o ");
+            else
+            {
+                fprintf(stderr, "S ");
+                // Snake *snake = get_snake(state, cell);
+                // if (snake->body_pos[0] == get_pos(x, y))
+            }
+        }
+        fprintf(stderr, "\n");
+    }
+}
+
 /* --- TOOL FUNCTIONS --- */
 
 int get_opponent_id(const int player_id) { return 1 - player_id; }
@@ -251,6 +293,133 @@ Pos get_north_pos(const Pos pos) { return pos + NORTH_POS_OFFSET; }
 Pos get_west_pos(const Pos pos) { return pos + WEST_POS_OFFSET; }
 Pos get_east_pos(const Pos pos) { return pos + EAST_POS_OFFSET; }
 Pos get_south_pos(const Pos pos) { return pos + SOUTH_POS_OFFSET; }
+
+/* --- BFS --- */
+
+int find_closest_energy_cell_recursive(State &state, queue<pair<Pos, int>> &bfs_queue, bool visited[], Pos &closest_energy_cell_pos)
+{
+    if (bfs_queue.empty())
+    {
+        return -1; // No energy cell found
+    }
+
+    pair<Pos, int> front = bfs_queue.front();
+    Pos current_pos = front.first;
+    int distance = front.second;
+    bfs_queue.pop();
+
+    // Explore neighbors in order: North, West, East, South
+    Pos neighbors[4] = {
+        get_north_pos(current_pos),
+        get_west_pos(current_pos),
+        get_east_pos(current_pos),
+        get_south_pos(current_pos)};
+
+    bool neighbor_out_of_bounds[4] = {
+        is_north_cell_out_of_bounds(current_pos),
+        is_west_cell_out_of_bounds(current_pos),
+        is_east_cell_out_of_bounds(current_pos),
+        is_south_cell_out_of_bounds(current_pos)};
+
+    for (int i = 0; i < 4; i++)
+    {
+
+        // New valid cell if : In map & Not visited yet & Empty
+        if (!neighbor_out_of_bounds[i] && !visited[neighbors[i]])
+        {
+
+            int neighbor = get_cell(state, neighbors[i]);
+
+            // Check if the position is an energy cell
+            if (neighbor == CELL_ENERGY)
+            {
+                closest_energy_cell_pos = neighbors[i];
+                return distance + 1;
+            }
+
+            if (neighbor != CELL_EMPTY)
+                continue;
+
+            visited[neighbors[i]] = true;
+            bfs_queue.push(make_pair(neighbors[i], distance + 1));
+            // fprintf(stderr, "BFS: Push (%d, %d) with distance %d\n", get_x(neighbors[i]), get_y(neighbors[i]), distance + 1);
+        }
+    }
+
+    // Recursively process the rest of the queue
+    return find_closest_energy_cell_recursive(state, bfs_queue, visited, closest_energy_cell_pos);
+}
+
+int find_closest_energy_cell(State &state, Pos start_pos, Pos &closest_energy_cell_pos)
+{
+    // Check if the starting position is an energy cell
+    if (get_cell(state, start_pos) == CELL_ENERGY)
+    {
+        closest_energy_cell_pos = start_pos;
+        return 0;
+    }
+
+    bool visited[MAX_CELL_COUNT] = {false};
+    queue<pair<Pos, int>> bfs_queue;
+    visited[start_pos] = true;
+    bfs_queue.push(make_pair(start_pos, 0));
+
+    return find_closest_energy_cell_recursive(state, bfs_queue, visited, closest_energy_cell_pos);
+}
+
+/* --- DECISION MAKING --- */
+
+int resolve_snake_dir(State &state, int snake_id)
+{
+    Snake *snake = get_snake(state, snake_id);
+    Pos snake_pos = get_snake_pos(snake);
+
+    // Explore neighbors in order: North, West, East, South
+    Pos neighbors[4] = {
+        get_east_pos(snake_pos),
+        get_west_pos(snake_pos),
+        get_north_pos(snake_pos),
+        get_south_pos(snake_pos)};
+
+    bool neighbor_out_of_bounds[4] = {
+        is_east_cell_out_of_bounds(snake_pos),
+        is_west_cell_out_of_bounds(snake_pos),
+        is_north_cell_out_of_bounds(snake_pos),
+        is_south_cell_out_of_bounds(snake_pos)};
+
+    Pos closest = -1;
+    Pos best_closest = -1;
+    int best_dist = 100000;
+    int best_i = -1;
+    for (int i = 0; i < 4; i++)
+    {
+
+        // New valid cell if : In map & Not visited yet & Empty
+        if (!neighbor_out_of_bounds[i] && (get_cell(state, neighbors[i]) == CELL_EMPTY || get_cell(state, neighbors[i]) == CELL_ENERGY))
+        {
+            int dist = find_closest_energy_cell(state, neighbors[i], closest);
+            // fprintf(stderr, "Snake %d try dir %d with dist %d ... (Actual best dist is %d on dir %d\n", snake_id, i, dist, best_dist, best_i);
+
+            if (dist != -1 && dist < best_dist)
+            {
+                best_dist = dist;
+                best_closest = closest;
+                best_i = i;
+                // fprintf(stderr, "Snake %d find new best dir %d with dist %d !\n", snake_id, i, dist);
+            }
+        }
+    }
+
+    if (best_i == -1)
+    {
+        fprintf(stderr, "Snake %d is stuck !\n", snake_id);
+        return 0;
+    }
+
+    fprintf(stderr, "Snake %d must go %d !\n", snake_id, best_i);
+    cout << "MARK " << get_x(best_closest) << " " << get_y(best_closest) << ";";
+    return best_i;
+}
 
 /* --- PARSING --- */
 
@@ -396,13 +565,21 @@ int main()
     {
         parse_turn_inputs(state);
         print_map(state);
+        // print_map_ascii(state);
 
         for (int i = 0; i < get_player_alive_snake_count(state, map_properties.my_id); i++)
         {
+            int snake_id = get_player_alive_snake_id(state, map_properties.my_id, i);
+            int dir = resolve_snake_dir(state, snake_id);
 
-            int id = get_player_alive_snake_id(state, map_properties.my_id, i);
-
-            cout << id << " UP";
+            if (dir == 0)
+                cout << snake_id << " RIGHT";
+            else if (dir == 1)
+                cout << snake_id << " LEFT";
+            else if (dir == 2)
+                cout << snake_id << " UP";
+            else
+                cout << snake_id << " DOWN";
 
             if (i != get_player_alive_snake_count(state, map_properties.my_id) - 1)
                 cout << ";";
