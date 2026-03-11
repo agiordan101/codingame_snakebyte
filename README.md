@@ -3,13 +3,16 @@ Winter Challenge 2026
 
 # TODO
 
-## Strategies
-
-- Create heuristics mixing Score + 1 snake BFS dist will help snakes to not crash on walls when no paths exist
+- Mettre un padding de 3 minimum sur la gauche pour que les snakes puissent se déplacer en dehors de la map
+- S'assurer que les "out of bound" s'applique sur les dimensions max des arrays et pas la map
 - Consider actual tails as walkable
+
+## Strategies
 
 ### Heuristics
 
+- Create heuristics mixing Score + 1 snake BFS dist will help snakes to not crash on walls when no paths exist
+- No need to include physics in fitness function, tree iterations will take care of possible/impossible paths
 
 ### Beam search strategy
 
@@ -43,10 +46,3 @@ ActionSet -> A history of TurnMoveSet representing game turns
             - Create a TurnMoveSet with the two PlayerMoveSet
             - Create a candidate ActionSet from the current ActionSet and TurnMoveSet, and add it to beam_search_candidates list
     - Keep the best 'beam_width' ActionSet from beam_search_candidates, and move them in beam_search_actionsets
-
-
-## Implementation
-
-- Remove initial cells from State, and just save a initial_state. memcpy each turn the State
-- Mettre un padding de 3 minimum sur la gauche pour que les snakes puissent se déplacer en dehors de la map
-    - S'assurer que les "out of bound" s'applique sur les dimensions max des arrays et pas la map

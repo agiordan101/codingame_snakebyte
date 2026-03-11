@@ -8,8 +8,6 @@
 // v3 - Add an opponent move choice before (The best base don heuristic)
 // v4 - Beam search : Strategy explained in README.md
 
-// No need to include physics in fitness function, tree iterations will take care of possible/impossible paths
-
 #undef _GLIBCXX_DEBUG
 #pragma GCC optimize("Ofast,unroll-loops,omit-frame-pointer,inline")
 #pragma GCC option("arch=native", "tune=native", "no-zero-upper")
