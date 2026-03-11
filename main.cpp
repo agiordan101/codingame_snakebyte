@@ -1,4 +1,4 @@
-// Version 1.3
+// Version 1.2.1
 
 // Algorithms road map :
 // v1 - Each snakes go to closest Energy cell using BFS
@@ -154,7 +154,6 @@ constexpr int CELL_ENERGY = 10;
 struct State
 {
     int game_points;                   // Points difference between my id and opponent id
-    int initial_cells[MAX_CELL_COUNT]; // 0-7: snake_id, 8: CELL_EMPTY, 9: CELL_PLATFORM
     int cells[MAX_CELL_COUNT];         // 0-7: snake_id, 8: CELL_EMPTY, 9: CELL_PLATFORM, 10: CELL_ENERGY
 
     Snake snakes[MIN_SNAKE_ID + MAX_SNAKE_COUNT]; // 1-16: snakes, 0: unused
@@ -178,7 +177,6 @@ Snake *get_snake(State &state, int snake_id) { return &state.snakes[snake_id]; }
 int get_player_alive_snake_count(State &state, int player_id) { return state.alive_snake_count[player_id]; }
 int get_player_alive_snake_id(State &state, int player_id, int index) { return state.alive_snake_ids[player_id][index]; }
 
-void set_initial_cell(State &state, int x, int y, int value) { state.initial_cells[get_pos(x, y)] = value; }
 void set_cell(State &state, Pos pos, int value) { state.cells[pos] = value; }
 void set_energy(State &state, int index, int x, int y) { state.energies[index] = get_pos(x, y); }
 void set_alive_snake_count(State &state, int player_id, int count)
@@ -566,9 +564,9 @@ void parse_initial_inputs(State &state)
         for (int x = 0; x < map_properties.width; x++)
         {
             if (row[x] == '.')
-                set_initial_cell(state, x, y, CELL_EMPTY);
+                set_cell(state, get_pos(x, y), CELL_EMPTY);
             else if (row[x] == '#')
-                set_initial_cell(state, x, y, CELL_PLATFORM);
+                set_cell(state, get_pos(x, y), CELL_PLATFORM);
         }
     }
 
@@ -606,7 +604,6 @@ Pos parse_pos_from_segment(string segment)
 
 void parse_snakebot(State &state, int *my_snake_count, int *opp_snake_count, int snakebotId, string bodyStr)
 {
-
     Snake *snake = get_snake(state, snakebotId);
     int player_id = get_snake_player_id(snake);
 
@@ -646,8 +643,6 @@ void parse_snakebot(State &state, int *my_snake_count, int *opp_snake_count, int
 
 void parse_turn_inputs(State &state)
 {
-    memcpy(state.cells, state.initial_cells, MAX_CELL_COUNT * sizeof(int));
-
     cin >> state.energy_count;
     for (int i = 0; i < state.energy_count; i++)
     {
@@ -680,11 +675,16 @@ void parse_turn_inputs(State &state)
 
 int main()
 {
+    State initial_state;
+    bzero(&initial_state, sizeof(initial_state));
+    parse_initial_inputs(initial_state);
+    
+    // Save initial state for resetting cells each turn
     State state;
-    parse_initial_inputs(state);
-
     while (true)
     {
+        // Reset state to initial state before parsing fresh dynamic data
+        memcpy(&state, &initial_state, sizeof(state));
         parse_turn_inputs(state);
         update_game_points(state);
         print_map(state, "Turn beginning");
