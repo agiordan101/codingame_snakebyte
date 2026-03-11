@@ -1,8 +1,9 @@
-// Version 1.1
+// Version 1.2
 
 // Algorithms road map :
 // v1 - Each snakes go to closest Energy cell using BFS
 //  v1.1 - Apply Action + Gravity first, and then use BFS value
+//  v1.2 - Always select a valid action, even if no energy cell is found
 // v2 - Evaluate all possible move combinaisons using physics simulation (gravity + collisions) first and then fitness function (Score diff + sum (Snake/Energy distances))
 // v3 - Beam search + Fitness function : Decreasing beam width, start at 3 ^ (3 + 3)
 // v4 - Beam search + GA + Fitness function : Select 'beam_width' children with a small GA using fitness function already created
@@ -490,7 +491,7 @@ Pos choose_snake_dir(State &state, Snake *snake)
         // print_map(next_state, "Map after gravity");
 
         int dist = find_closest_energy_cell(next_state, get_snake_head_pos(&next_snake), closest);
-        if (dist != -1 && dist < best_dist)
+        if (best_action == -1 || (dist != -1 && dist < best_dist))
         {
             best_dist = dist;
             best_closest = closest;
@@ -505,8 +506,10 @@ Pos choose_snake_dir(State &state, Snake *snake)
         return 0;
     }
 
-    // fprintf(stderr, "Snake %d must go %d !\n", get_snake_id(snake), best_closest);
-    cout << "MARK " << get_x(best_closest) << " " << get_y(best_closest) << ";";
+    if (best_closest != -1)
+    {
+        cout << "MARK " << get_x(best_closest) << " " << get_y(best_closest) << ";";
+    }
     return best_action;
 }
 
