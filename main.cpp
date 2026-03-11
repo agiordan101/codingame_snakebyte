@@ -1,13 +1,12 @@
-// Version 1.2.1
+// Version 1.2
 
 // Algorithms road map :
 // v1 - Each snakes go to closest Energy cell using BFS
 //  v1.1 - Apply Action + Gravity first, and then use BFS value
 //  v1.2 - Always select a valid action, even if no energy cell is found
-//  v1.3 - Create fitness function (Score diff + Snake/Closest energy distance) and use it evaluate the actions instead of a raw BFS value
-// v2 - Evaluate all possible move combinaisons, using physics simulation (gravity + collisions) and an improved fitness function (Score diff + sum (Snake/Energy distances))
-// v3 - Beam search + Fitness function : Decreasing beam width, start at 3 ^ (3 + 3)
-// v4 - Beam search + GA + Fitness function : Select 'beam_width' children with a small GA using fitness function already created
+// v2 - Evaluate all possible move combinaisons at current depth, using physics simulation (gravity + collisions) and an improved fitness function (Score diff + sum (Snake/Energy distances))
+// v3 - Add an opponent move choice before (The best base don heuristic)
+// v4 - Beam search : Strategy explained in README.md
 
 // No need to include physics in fitness function, tree iterations will take care of possible/impossible paths
 
