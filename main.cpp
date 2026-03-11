@@ -1,6 +1,6 @@
 // Version 1.3
 
-// Algorithms road map :
+// Algorithms :
 // v1 - Each snakes go to closest Energy cell using BFS
 //  v1.1 - Apply Action + Gravity first, and then use BFS value
 //  v1.2 - Always select a valid action, even if no energy cell is found
@@ -46,14 +46,8 @@ struct MapProperties
 {
     int width;
     int height;
-    // useless
-    int cell_count; // width * height
     int my_id;
     int opp_id;
-    int max_snake_count;
-    // useless
-    vector<Pos> adjacent_cells[MAX_CELL_COUNT]; // All valid adjacent cells + the current cell
-                                                // (N, W, E, S)
 };
 
 static MapProperties map_properties;
@@ -128,27 +122,6 @@ void move_snake_to(Snake *snake, Pos new_head_pos)
     set_snake_body_pos(snake, 0, new_head_pos);
 }
 
-/* --- ACTION --- */
-
-// useless
-enum ActionType
-{
-    ACTION_UP,
-    ACTION_LEFT,
-    ACTION_RIGHT,
-    ACTION_DOWN
-};
-
-// useless
-struct Action
-{
-    int snake_id;
-    ActionType action_type; // ACTION_UP | ACTION_LEFT | ACTION_RIGHT | ACTION_DOWN
-};
-
-int get_action_snake_id(Action &action) { return action.snake_id; }
-ActionType get_action_type(Action &action) { return action.action_type; }
-
 /* --- STATE --- */
 
 constexpr int MAX_SNAKE_COUNT = 8;
@@ -173,14 +146,12 @@ struct State
     Pos energies[MAX_CELL_COUNT];
     int energy_count;
 
-    // useless
-    Action actions[MAX_ACTION_COUNT]; // All available actions for one turn
-    int action_count;                 // Number of actions available
+    // Action actions[MAX_ACTION_COUNT]; // All available actions for one turn
+    // int action_count;                 // Number of actions available
 
-    // useless
-    Action selected_actions[MAX_SNAKE_COUNT];
-    int selected_actions_count;
-    int snake_having_played[MIN_SNAKE_ID + MAX_SNAKE_COUNT]; // 0: not played, 1: played
+    // Action selected_actions[MAX_SNAKE_COUNT];
+    // int selected_actions_count;
+    // int snake_having_played[MIN_SNAKE_ID + MAX_SNAKE_COUNT]; // 0: not played, 1: played
 };
 
 int get_game_points(State &state) { return state.game_points; }
@@ -198,7 +169,6 @@ void set_alive_snake_count(State &state, int player_id, int count)
 void set_player_snake_ids(State &state, int player_id, int index, int snake_id)
 {
     state.alive_snake_ids[player_id][index] = snake_id;
-    // fprintf(stderr, "set_player_snake_ids : p %d - idx %d - snakeid %d\n", player_id, index, snake_id);
 }
 
 void update_game_points(State &state)
@@ -231,7 +201,8 @@ void update_game_points(State &state)
 
 void initialize_cells(State &state)
 {
-    for (int i = 0; i < MAX_CELL_COUNT; i++) {
+    for (int i = 0; i < MAX_CELL_COUNT; i++)
+    {
         state.cells[i] = CELL_EMPTY;
     }
 }
@@ -245,6 +216,7 @@ void initialize_snake_data(
         snake, snake_id, player_id);
 }
 
+int find_closest_energy_cell(State &state, Pos start_pos, Pos &closest_energy_cell_pos);
 void print_cells(State &state, string title = "")
 {
     if (title != "")
@@ -305,15 +277,9 @@ void print_map(State &state, string title = "")
         fprintf(stderr, "\n");
     }
 }
-
-//Move up
-int find_closest_energy_cell(State &state, Pos start_pos, Pos &closest_energy_cell_pos);
 void print_map_bfs_distances(State &state)
 {
     Pos closest = -1;
-
-    // int test = find_closest_energy_cell(state, 0, closest);
-    // fprintf(stderr, "BFS result: %d | (%d, %d)\n", test, get_map_x(closest), get_map_y(closest));
 
     for (int y = 0; y < map_properties.height; y++)
     {
@@ -341,12 +307,6 @@ void print_map_bfs_distances(State &state)
 /* --- TOOL FUNCTIONS --- */
 
 int get_opponent_id(const int player_id) { return 1 - player_id; }
-
-// useless
-bool is_out_of_bounds(const int x, const int y)
-{
-    return x < 0 || y < 0 || x >= map_properties.width || y >= map_properties.height;
-}
 
 bool is_north_cell_out_of_bounds(const Pos pos) { return get_y(pos) == 0; }
 bool is_west_cell_out_of_bounds(const Pos pos) { return get_x(pos) == 0; }
@@ -598,7 +558,6 @@ void parse_initial_inputs(State &state)
 
     cin >> map_properties.width;
     cin >> map_properties.height;
-    map_properties.cell_count = map_properties.width * map_properties.height;
 
     initialize_cells(state);
     cin.ignore();
@@ -621,7 +580,6 @@ void parse_initial_inputs(State &state)
 
     int snakebots_per_player;
     cin >> snakebots_per_player;
-    // fprintf(stderr, "snakebots_per_player : %d\n", snakebots_per_player);
 
     set_alive_snake_count(state, map_properties.my_id, snakebots_per_player);
     set_alive_snake_count(state, map_properties.opp_id, snakebots_per_player);
@@ -647,7 +605,6 @@ Pos parse_pos_from_segment(string segment)
     int x = stoi(segment.substr(0, commaPos));
     int y = stoi(segment.substr(commaPos + 1));
 
-    // fprintf(stderr, "parse_pos_from_segment: %d %d\n", x, y);
     // Convert map coordinates to internal data structure coordinates
     return get_pos_from_map_coord(x, y);
 }

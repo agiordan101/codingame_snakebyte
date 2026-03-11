@@ -44,3 +44,33 @@ ActionSet -> A history of TurnMoveSet representing game turns
             - Create a TurnMoveSet with the two PlayerMoveSet
             - Create a candidate ActionSet from the current ActionSet and TurnMoveSet, and add it to beam_search_candidates list
     - Keep the best 'beam_width' ActionSet from beam_search_candidates, and move them in beam_search_actionsets
+
+## History
+
+# v1.3
+
++ Add padding around map so all simulations work outside the map (BFS, collisions, gravity, beam search)
+
+League: Bronze (max)
+Position: 192/1206
+
+# v1.2
+
++ Always select a valid action, even if no energy cell is found
+
+League: Bronze (max)
+Position: 290/1206
+
+# v1.1
+
++ Apply Action + Gravity first, and then use BFS value
+
+League: Bronze (max)
+Position: 350/1000
+
+# v1.0
+
+Each snakes go to closest Energy cell using BFS
+
+League: Bronze (max)
+Position: 210/800
