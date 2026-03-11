@@ -1,10 +1,11 @@
-// Version 1.2
+// Version 1.3
 
 // Algorithms road map :
 // v1 - Each snakes go to closest Energy cell using BFS
 //  v1.1 - Apply Action + Gravity first, and then use BFS value
 //  v1.2 - Always select a valid action, even if no energy cell is found
-// v2 - Evaluate all possible move combinaisons using physics simulation (gravity + collisions) first and then fitness function (Score diff + sum (Snake/Energy distances))
+//  v1.3 - Create fitness function (Score diff + Snake/Closest energy distance) and use it evaluate the actions instead of a raw BFS value
+// v2 - Evaluate all possible move combinaisons, using physics simulation (gravity + collisions) and an improved fitness function (Score diff + sum (Snake/Energy distances))
 // v3 - Beam search + Fitness function : Decreasing beam width, start at 3 ^ (3 + 3)
 // v4 - Beam search + GA + Fitness function : Select 'beam_width' children with a small GA using fitness function already created
 
@@ -171,6 +172,7 @@ struct State
     int snake_having_played[MIN_SNAKE_ID + MAX_SNAKE_COUNT]; // 0: not played, 1: played
 };
 
+int get_game_points(State &state) { return state.game_points; }
 int get_cell(State &state, Pos pos) { return state.cells[pos]; }
 Snake *get_snake(State &state, int snake_id) { return &state.snakes[snake_id]; }
 int get_player_alive_snake_count(State &state, int player_id) { return state.alive_snake_count[player_id]; }
@@ -189,6 +191,32 @@ void set_player_snake_ids(State &state, int player_id, int index, int snake_id)
     // fprintf(stderr, "set_player_snake_ids : p %d - idx %d - snakeid %d\n", player_id, index, snake_id);
 }
 
+void update_game_points(State &state)
+{
+    // Positive game points is better for my player
+    int my_total_length = 0;
+    int opp_total_length = 0;
+    
+    // Sum lengths of alive snakes for my player
+    int my_snake_count = get_player_alive_snake_count(state, map_properties.my_id);
+    for (int i = 0; i < my_snake_count; i++) {
+        int snake_id = get_player_alive_snake_id(state, map_properties.my_id, i);
+        Snake *snake = get_snake(state, snake_id);
+        my_total_length += get_snake_body_length(snake);
+    }
+    
+    // Sum lengths of alive snakes for opponent
+    int opp_snake_count = get_player_alive_snake_count(state, map_properties.opp_id);
+    for (int i = 0; i < opp_snake_count; i++) {
+        int snake_id = get_player_alive_snake_id(state, map_properties.opp_id, i);
+        Snake *snake = get_snake(state, snake_id);
+        opp_total_length += get_snake_body_length(snake);
+    }
+    
+    // Calculate difference
+    state.game_points = my_total_length - opp_total_length;
+}
+
 void initialize_snake_data(
     State &state,
     int snake_id,
@@ -202,7 +230,7 @@ void initialize_snake_data(
 void print_map(State &state, string title = "")
 {
     if (title != "")
-        fprintf(stderr, "%s\n", title.c_str());
+        fprintf(stderr, "(dPoint=%d) %s\n", get_game_points(state), title.c_str());
 
     for (int y = 0; y < map_properties.height; y++)
     {
@@ -490,6 +518,8 @@ Pos choose_snake_dir(State &state, Snake *snake)
         apply_gravity(next_state, &next_snake);
         // print_map(next_state, "Map after gravity");
 
+        update_game_points(next_state);
+
         int dist = find_closest_energy_cell(next_state, get_snake_head_pos(&next_snake), closest);
         if (best_action == -1 || (dist != -1 && dist < best_dist))
         {
@@ -656,6 +686,7 @@ int main()
     while (true)
     {
         parse_turn_inputs(state);
+        update_game_points(state);
         print_map(state, "Turn beginning");
         // print_map_ascii(state);
 
