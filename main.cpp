@@ -304,15 +304,15 @@ int generate_snake_actions(State &state, Snake *snake, Pos actions[4])
 
     // Explore neighbors in order: North, West, East, South
     Pos neighbors[4] = {
-        get_north_pos(head_pos),
         get_west_pos(head_pos),
         get_east_pos(head_pos),
+        get_north_pos(head_pos),
         get_south_pos(head_pos)};
 
     bool neighbor_out_of_bounds[4] = {
-        is_north_cell_out_of_bounds(head_pos),
         is_west_cell_out_of_bounds(head_pos),
         is_east_cell_out_of_bounds(head_pos),
+        is_north_cell_out_of_bounds(head_pos),
         is_south_cell_out_of_bounds(head_pos)};
 
     int action_count = 0;
@@ -471,6 +471,14 @@ Pos choose_snake_dir(State &state, Snake *snake)
     int best_dist = 100000;
     for (int i = 0; i < action_count; i++)
     {
+        if (get_cell(state, actions[i]) == CELL_ENERGY)
+        {
+            best_dist = 0;
+            best_closest = actions[i];
+            best_action = actions[i];
+            break;
+        }
+
         // Reset states
         memcpy(&next_state, &state, sizeof(State));
         memcpy(&next_snake, snake, sizeof(Snake));
