@@ -4,6 +4,7 @@ Winter Challenge 2026
 # TODO
 
 - Consider actual tails as walkable
+- Are is_eating/is_colliding/is_dying useful ?
 
 ## Strategies
 
@@ -19,14 +20,15 @@ Pour chaque snake :
 Pour chaque snake :
     Parcourir larray, si la head pos est trouvé 2 fois alors il y a collision :
         La gérer dans le Snake uniquement (Update le flag du snake 'colliding')
-Apply gravity :
-     L'appliquer individuellement en bouclant sur la liste de snakes, incrémenter un compteur à chaque fois qu'un snake bouge pas, jusqu'à ce quil atteigne <n snake>
-     Mettre un flag si le snake est posé sur une plateforme, pour ne pas le retester.
+        Handle la suppression du snke si il meurt
 Update les cells
     3 cas : 
         colliding = true: tete change pas | queue disparait
         eating = true: tête avance | queue change pas
         else: tête avance | queue disparait
+Apply gravity :
+     L'appliquer individuellement en bouclant sur la liste de snakes, incrémenter un compteur à chaque fois qu'un snake bouge pas, jusqu'à ce quil atteigne <n snake>
+     Mettre un flag si le snake est posé sur une plateforme, pour ne pas le retester.
 
 
 ### Heuristics
