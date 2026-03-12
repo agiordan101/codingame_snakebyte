@@ -78,6 +78,8 @@ struct Snake
     int player_id;
     Pos body_pos[MAX_SNAKE_SIZE];
     int body_length;
+    bool is_eating;
+    bool is_colliding;
 };
 
 int get_snake_id(Snake &snake) { return snake.id; }
@@ -88,6 +90,14 @@ Pos get_snake_body_length(Snake &snake) { return snake.body_length; }
 
 void set_snake_body_pos(Snake &snake, int index, Pos pos) { snake.body_pos[index] = pos; }
 void set_snake_body_length(Snake &snake, int length) { snake.body_length = length; }
+void set_snake_is_eating(Snake &snake) { snake.is_eating = true; }
+void set_snake_is_colliding(Snake &snake) { snake.is_colliding = true; }
+
+void reset_snake_state(Snake &snake)
+{
+    snake.is_eating = false;
+    snake.is_colliding = false;
+}
 
 void add_body_pos(Snake &snake, Pos pos)
 {
@@ -104,6 +114,8 @@ void initialize_snake_data(
     snake.player_id = player_id;
     bzero(snake.body_pos, sizeof(Pos) * MAX_SNAKE_SIZE);
     snake.body_length = 3;
+    snake.is_eating = false;
+    snake.is_colliding = false;
 }
 
 void print_snake(Snake &snake)
@@ -166,16 +178,29 @@ int get_alive_snake_id(State &state, int index) { return state.alive_snake_ids[i
 void set_cell(State &state, Pos pos, int value) { state.cells[pos] = value; }
 void set_energy(State &state, int index, Pos pos) { state.energies[index] = pos; }
 
-void reset_alive_snake_count(State &state) { 
+void reset_alive_snake_count(State &state)
+{
     state.alive_snake_count = 0;
-    state.player_alive_snake_count[0] = 0; 
-    state.player_alive_snake_count[1] = 0; 
+    state.player_alive_snake_count[0] = 0;
+    state.player_alive_snake_count[1] = 0;
 }
 void add_player_alive_snake_id(State &state, int player_id, int snake_id)
 {
     state.alive_snake_ids[state.alive_snake_count++] = snake_id;
     state.player_alive_snake_ids[player_id][state.player_alive_snake_count[player_id]++] = snake_id;
 }
+
+// void reset_snake_bodies(State &state)
+// {
+//     state.snake_bodies_count = 0;
+// }
+// void add_snake_body(State &state, Snake &snake)
+// {
+//     int snake_body_length = get_snake_body_length(snake);
+
+//     memcpy(&state.snake_bodies[state.snake_bodies_count], &snake.body_pos, sizeof(Pos) * snake_body_length);
+//     state.snake_bodies_count += snake_body_length;
+// }
 
 void update_game_points(State &state)
 {
@@ -540,12 +565,92 @@ void move_snake_to(Snake &snake, Pos new_head_pos, bool eating_energy)
     set_snake_body_pos(snake, 0, new_head_pos);
 }
 
-void apply_gravity(State &state, Snake &snake)
+void apply_move(State &state, Snake &snake, Move &move)
+{
+    Pos new_head_pos = get_move_dst_pos(move);
+    int cell_at_new_head_pos = get_cell(state, new_head_pos);
+
+    bool is_colliding = cell_at_new_head_pos == CELL_PLATFORM;
+    if (is_colliding)
+    {
+        set_snake_is_colliding(snake);
+
+        // Decrease snake length
+        set_snake_body_length(snake, snake.body_length - 1);
+
+        // Body positions remain the same
+    }
+    else
+    {
+        int body_length_to_move = snake.body_length - 1;
+
+        bool is_eating = cell_at_new_head_pos == CELL_ENERGY;
+        if (is_eating)
+        {
+            set_snake_is_eating(snake);
+
+            // Move the whole body positions, instead of loosing the tail position
+            body_length_to_move = snake.body_length;
+
+            // Increase snake length
+            set_snake_body_length(snake, snake.body_length + 1);
+        }
+
+        // Move the body positions
+        memcpy(&snake.body_pos[1], &snake.body_pos[0], sizeof(Pos) * body_length_to_move);
+
+        // Assign a new position to the head
+        set_snake_body_pos(snake, 0, new_head_pos);
+    }
+
+    // add_snake_body(state, snake);
+}
+
+void handle_snake_collisions(State &previous_state, State &state)
+{
+    for (int snake_index = 0; snake_index < get_alive_snake_count(state); snake_index++)
+    {
+        // Iter over all alive snakes
+        int snake_id = get_alive_snake_id(state, snake_index);
+        Snake &snake = get_snake(state, snake_id);
+        Pos snake_head_pos = get_snake_head_pos(snake);
+
+        for (int snake2_index = 0; snake2_index < get_alive_snake_count(state); snake2_index++)
+        {
+            if (snake_index == snake2_index)
+                continue; // Don't check collision with itself
+
+            // Iter over all other alive snakes
+            int snake2_id = get_alive_snake_id(state, snake2_index);
+            Snake &snake2 = get_snake(state, snake2_id);
+
+            // Check if snake head is colliding with snake2 body
+            for (int body_idx = 0; body_idx < get_snake_body_length(snake2); body_idx++)
+            {
+                Pos snake2_body_pos = get_snake_body_pos(snake2, body_idx);
+                if (snake_head_pos == snake2_body_pos)
+                {
+                    set_snake_is_colliding(snake);
+
+                    // Decrease its length by 1
+                    set_snake_body_length(snake, get_snake_body_length(snake) - 1);
+
+                    // Reset snake positions from previous state (Except the tail because it's losing one length)
+                    memcpy(&snake.body_pos, &get_snake(previous_state, snake_id).body_pos, sizeof(Pos) * get_snake_body_length(snake));
+                    return;
+                }
+            }
+        }
+    }
+}
+
+bool apply_snake_gravity(State &state, Snake &snake)
 {
     int snake_id = get_snake_id(snake);
     int snake_body_length = get_snake_body_length(snake);
     Pos new_snake_positions[snake_body_length];
 
+    bool gravity_applied = false;
     int y = 0;
     while (y++ < MAX_HEIGHT)
     {
@@ -558,10 +663,12 @@ void apply_gravity(State &state, Snake &snake)
 
             // fprintf(stderr, "Snake %d: Is cell %d solid? (Pos=%d)\n", snake_id, cell_below, pos);
             if (is_cell_solid(cell_below, snake_id))
-                return;
+                return gravity_applied;
 
             new_snake_positions[i] = pos_below;
         }
+
+        gravity_applied = true;
 
         // If not, remove snake from state
         for (int i = 0; i < snake_body_length; i++)
@@ -576,9 +683,45 @@ void apply_gravity(State &state, Snake &snake)
     }
 }
 
-// void apply_moveset(State &state, MoveSet &moveset)
-// {
-// }
+void apply_gravity(State &state)
+{
+    int gravity_finalized_count = 0;
+    int snake_index = 0;
+
+    // Iter until 'alive snake count' consecutive gravity is useless
+    while (gravity_finalized_count < get_alive_snake_count(state))
+    {
+        int snake_id = get_alive_snake_id(state, snake_index);
+        Snake &snake = get_snake(state, snake_id);
+
+        bool gravity_applied = apply_snake_gravity(state, snake);
+        if (gravity_applied)
+            gravity_finalized_count = 0;
+        else
+            gravity_finalized_count++;
+
+        // Loop over alive snakes indefinitely
+        if (++snake_index == get_alive_snake_count(state))
+            snake_index = 0;
+    }
+}
+
+void apply_moveset(State &previous_state, State &state, MoveSet &moveset)
+{
+    // reset_snake_bodies(state);
+    for (int i = 0; i < get_moveset_move_count(moveset); i++)
+    {
+        Move &move = get_moveset_move(moveset, i);
+
+        Snake &snake = get_snake(state, get_move_snake_id(move));
+        reset_snake_state(snake);
+
+        apply_move(state, snake, move);
+    }
+
+    handle_snake_collisions(previous_state, state);
+    apply_gravity(state);
+}
 
 /* --- BFS --- */
 
@@ -654,12 +797,35 @@ int find_closest_energy_cell(State &state, Pos start_pos, Pos &closest_energy_ce
 
 /* --- DECISION MAKING --- */
 
+float evaluate_state(State &state, int player_id)
+{
+    return get_game_points(state);
+}
+
 MoveSet choose_player_move_set(State &state, int player_id)
 {
+    State next_state;
+
     MoveSet movesets[MAX_PLAYER_MOVE_SETS];
     int moveset_count = generate_player_movesets(state, player_id, movesets);
 
-    return movesets[0];
+    MoveSet best_moveset;
+    float best_evaluation = -100000;
+    for (int i = 0; i < moveset_count; i++)
+    {
+        memcpy(&next_state, &state, sizeof(State));
+
+        apply_moveset(state, next_state, movesets[i]);
+        float evaluation = evaluate_state(next_state, player_id);
+
+        if (best_evaluation < evaluation)
+        {
+            best_evaluation = evaluation;
+            best_moveset = movesets[i];
+        }
+    }
+
+    return best_moveset;
 }
 
 Pos choose_snake_dir(State &state, Snake &snake)
@@ -698,7 +864,7 @@ Pos choose_snake_dir(State &state, Snake &snake)
         move_snake_to(next_snake, actions[i], eating_energy);
         // print_map(next_state, "Map after applying action");
 
-        apply_gravity(next_state, next_snake);
+        apply_snake_gravity(next_state, next_snake);
         // print_map(next_state, "Map after gravity");
 
         update_game_points(next_state);
