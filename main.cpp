@@ -1,4 +1,4 @@
-// Version 1.3
+// Version 2
 
 // Algorithms :
 // v1 - Each snakes go to closest Energy cell using BFS
@@ -78,8 +78,6 @@ struct Snake
     int player_id;
     Pos body_pos[MAX_SNAKE_SIZE];
     int body_length;
-    bool is_eating;
-    bool is_colliding;
     bool is_dying;
 };
 
@@ -91,18 +89,12 @@ int get_snake_body_length(Snake &snake) { return snake.body_length; }
 
 void set_snake_body_pos(Snake &snake, int index, Pos pos) { snake.body_pos[index] = pos; }
 void set_snake_body_length(Snake &snake, int length) { snake.body_length = length; }
-void set_snake_eating(Snake &snake) { snake.is_eating = true; }
-void set_snake_colliding(Snake &snake) { snake.is_colliding = true; }
 void set_snake_dying(Snake &snake) { snake.is_dying = true; }
 
-bool is_snake_eating(Snake &snake) { return snake.is_eating; }
-bool is_snake_colliding(Snake &snake) { return snake.is_colliding; }
 bool is_snake_dying(Snake &snake) { return snake.is_dying; }
 
 void reset_snake_state(Snake &snake)
 {
-    snake.is_eating = false;
-    snake.is_colliding = false;
     snake.is_dying = false;
 }
 
@@ -121,8 +113,6 @@ void initialize_snake_data(
     snake.player_id = player_id;
     bzero(snake.body_pos, sizeof(Pos) * MAX_SNAKE_SIZE);
     snake.body_length = 3;
-    snake.is_eating = false;
-    snake.is_colliding = false;
     snake.is_dying = false;
 }
 
@@ -389,7 +379,7 @@ void set_moveset_move_count(MoveSet &moveset, int count) { moveset.move_count = 
 void print_moveset(MoveSet moveset)
 {
     for (int i = 0; i < moveset.move_count; i++)
-        fprintf(stderr, "S=%d: %d %d / ", moveset.moves[i].snake_id, get_map_x(moveset.moves[i].dst_pos), get_map_y(moveset.moves[i].dst_pos));
+        fprintf(stderr, "S=%d: %d %d | ", moveset.moves[i].snake_id, get_map_x(moveset.moves[i].dst_pos), get_map_y(moveset.moves[i].dst_pos));
 }
 
 /* --- TOOL FUNCTIONS --- */
@@ -562,11 +552,8 @@ void apply_move(State &state, Snake &snake, Move &move)
     Pos new_head_pos = get_move_dst_pos(move);
     int cell_at_new_head_pos = get_cell(state, new_head_pos);
 
-    bool is_colliding = cell_at_new_head_pos == CELL_PLATFORM;
-    if (is_colliding)
+    if (cell_at_new_head_pos == CELL_PLATFORM)
     {
-        set_snake_colliding(snake);
-
         // Decrease snake length
         set_snake_body_length(snake, get_snake_body_length(snake) - 1);
 
@@ -576,10 +563,8 @@ void apply_move(State &state, Snake &snake, Move &move)
     {
         int body_length_to_move = get_snake_body_length(snake) - 1;
 
-        bool is_eating = cell_at_new_head_pos == CELL_ENERGY;
-        if (is_eating)
+        if (cell_at_new_head_pos == CELL_ENERGY)
         {
-            set_snake_eating(snake);
             set_cell(state, new_head_pos, CELL_EMPTY); // Remove the energy cel (even if two snakes will collide on it)
 
             // Move the whole body positions, instead of loosing the tail position
@@ -595,8 +580,6 @@ void apply_move(State &state, Snake &snake, Move &move)
         // Assign a new position to the head
         set_snake_body_pos(snake, 0, new_head_pos);
     }
-
-    // add_snake_body(state, snake);
 }
 
 void apply_all_moves(State &state, MoveSet &moveset)
@@ -638,8 +621,6 @@ void handle_snake_collisions(State &previous_state, State &state)
                 Pos snake2_body_pos = get_snake_body_pos(snake2, body_idx);
                 if (snake_head_pos == snake2_body_pos)
                 {
-                    set_snake_colliding(snake);
-
                     // Decrease its length by 1
                     set_snake_body_length(snake, get_snake_body_length(snake) - 1);
 

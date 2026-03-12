@@ -3,8 +3,7 @@ Winter Challenge 2026
 
 # TODO
 
-- Consider actual tails as walkable
-- Are is_eating/is_colliding/is_dying useful ?
+- 
 
 ## Strategies
 
@@ -75,9 +74,9 @@ ActionSet -> A history of TurnMoveSet representing game turns
 
 + Add padding around map so all simulations work outside the map (BFS, collisions, gravity, beam search)
 
-League: Bronze (max)
+League: Silver (max)
 Begin at position : 192/1206
-Ending at position: 300/1333
+Ending at position: 442/1446
 
 # v1.2
 
