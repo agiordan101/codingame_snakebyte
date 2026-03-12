@@ -405,11 +405,6 @@ Pos get_south_pos(const Pos pos) { return pos + SOUTH_POS_OFFSET; }
 
 /* --- GAME PHYSICS - GENERATION --- */
 
-bool is_cell_walkable(int cell)
-{
-    return cell == CELL_EMPTY || cell == CELL_ENERGY;
-}
-
 bool is_cell_solid(int cell, int snake_id)
 {
     return cell != snake_id && cell != CELL_EMPTY;
@@ -437,8 +432,8 @@ int generate_snake_moves(State &state, Snake &snake, Pos moves[3])
     {
         int neighbor = get_cell(state, neighbors[i]);
 
-        // New valid cell if : In map & Not visited yet & Empty
-        if (!neighbor_out_of_bounds[i] && is_cell_walkable(neighbor))
+        // New valid cell if : In map & Not it neck
+        if (!neighbor_out_of_bounds[i] && neighbors[i] != get_snake_body_pos(snake, 1))
         {
             moves[move_count++] = neighbors[i];
         }
@@ -450,7 +445,6 @@ int generate_snake_moves(State &state, Snake &snake, Pos moves[3])
         for (int i = 0; i < 4; i++)
         {
             int neighbor = get_cell(state, neighbors[i]);
-            fprintf(stderr, "Neighbor %d: Pos=%d %d - Cell=%d - OofB=%d - Walkable=%d\n", i, get_map_x(neighbors[i]), get_map_y(neighbors[i]), neighbor, neighbor_out_of_bounds[i], is_cell_walkable(neighbor));
         }
 
         for (int body_idx = 0; body_idx < get_snake_body_length(snake); body_idx++)
