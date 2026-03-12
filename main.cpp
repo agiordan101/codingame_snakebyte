@@ -133,12 +133,19 @@ struct State
     int game_points;           // Points difference between my id and opponent id
     int cells[MAX_CELL_COUNT]; // 0-7: snake_id, 8: CELL_EMPTY, 9: CELL_PLATFORM, 10: CELL_ENERGY
 
-    Snake snakes[MIN_SNAKE_ID + MAX_SNAKE_COUNT]; // 1-16: snakes, 0: unused
-    int alive_snake_count[2];
-    int alive_snake_ids[2][MAX_PLAYER_SNAKE_COUNT];
+    Snake snakes[MAX_SNAKE_COUNT]; // 0-7: snakes
+
+    int player_alive_snake_count[2];
+    int player_alive_snake_ids[2][MAX_PLAYER_SNAKE_COUNT];
+
+    int alive_snake_count;
+    int alive_snake_ids[MAX_SNAKE_COUNT];
 
     Pos energies[MAX_CELL_COUNT];
     int energy_count;
+
+    // Pos snake_bodies[MAX_CELL_COUNT];
+    // int snake_bodies_count;
 
     // Action actions[MAX_ACTION_COUNT]; // All available actions for one turn
     // int action_count;                 // Number of actions available
@@ -151,18 +158,23 @@ struct State
 int get_game_points(State &state) { return state.game_points; }
 int get_cell(State &state, Pos pos) { return state.cells[pos]; }
 Snake &get_snake(State &state, int snake_id) { return state.snakes[snake_id]; }
-int get_player_alive_snake_count(State &state, int player_id) { return state.alive_snake_count[player_id]; }
-int get_player_alive_snake_id(State &state, int player_id, int index) { return state.alive_snake_ids[player_id][index]; }
+int get_player_alive_snake_count(State &state, int player_id) { return state.player_alive_snake_count[player_id]; }
+int get_player_alive_snake_id(State &state, int player_id, int index) { return state.player_alive_snake_ids[player_id][index]; }
+int get_alive_snake_count(State &state) { return state.alive_snake_count; }
+int get_alive_snake_id(State &state, int index) { return state.alive_snake_ids[index]; }
 
 void set_cell(State &state, Pos pos, int value) { state.cells[pos] = value; }
 void set_energy(State &state, int index, Pos pos) { state.energies[index] = pos; }
-void set_alive_snake_count(State &state, int player_id, int count)
-{
-    state.alive_snake_count[player_id] = count;
+
+void reset_alive_snake_count(State &state) { 
+    state.alive_snake_count = 0;
+    state.player_alive_snake_count[0] = 0; 
+    state.player_alive_snake_count[1] = 0; 
 }
-void set_player_snake_ids(State &state, int player_id, int index, int snake_id)
+void add_player_alive_snake_id(State &state, int player_id, int snake_id)
 {
-    state.alive_snake_ids[player_id][index] = snake_id;
+    state.alive_snake_ids[state.alive_snake_count++] = snake_id;
+    state.player_alive_snake_ids[player_id][state.player_alive_snake_count[player_id]++] = snake_id;
 }
 
 void update_game_points(State &state)
@@ -692,7 +704,7 @@ Pos choose_snake_dir(State &state, Snake &snake)
         update_game_points(next_state);
 
         int dist = find_closest_energy_cell(next_state, get_snake_head_pos(next_snake), closest);
-        if (best_action == -1 || (dist != -1 && dist < best_dist))
+        if (dist != -1 && dist < best_dist)
         {
             best_dist = dist;
             best_closest = closest;
@@ -746,21 +758,20 @@ void parse_initial_inputs(State &state)
     int snakebots_per_player;
     cin >> snakebots_per_player;
 
-    set_alive_snake_count(state, map_properties.my_id, snakebots_per_player);
-    set_alive_snake_count(state, map_properties.opp_id, snakebots_per_player);
+    reset_alive_snake_count(state);
 
     int snakebot_id;
     for (int i = 0; i < snakebots_per_player; i++)
     {
         cin >> snakebot_id;
         initialize_snake_data(state, snakebot_id, map_properties.my_id);
-        set_player_snake_ids(state, map_properties.my_id, i, snakebot_id);
+        add_player_alive_snake_id(state, map_properties.my_id, snakebot_id);
     }
     for (int i = 0; i < snakebots_per_player; i++)
     {
         cin >> snakebot_id;
         initialize_snake_data(state, snakebot_id, map_properties.opp_id);
-        set_player_snake_ids(state, map_properties.opp_id, i, snakebot_id);
+        add_player_alive_snake_id(state, map_properties.opp_id, snakebot_id);
     }
 }
 
@@ -774,20 +785,8 @@ Pos parse_pos_from_segment(string segment)
     return get_pos_from_map_coord(x, y);
 }
 
-void parse_snakebot(State &state, int *my_snake_count, int *opp_snake_count, int snakebotId, string bodyStr)
+void parse_snakebot(State &state, Snake &snake, int snakebotId, string bodyStr)
 {
-    Snake &snake = get_snake(state, snakebotId);
-    int player_id = get_snake_player_id(snake);
-
-    int *snake_count;
-    if (player_id == map_properties.my_id)
-        snake_count = my_snake_count;
-    else
-        snake_count = opp_snake_count;
-
-    set_player_snake_ids(state, player_id, *snake_count, snakebotId);
-    (*snake_count)++;
-
     reset_snake_length(snake);
 
     // Parse the body string into coordinates
@@ -828,11 +827,7 @@ void parse_turn_inputs(State &state)
         set_cell(state, state.energies[i], CELL_ENERGY);
     }
 
-    state.alive_snake_count[0] = 0;
-    state.alive_snake_count[1] = 0;
-
-    int my_snake_count = 0;
-    int opp_snake_count = 0;
+    reset_alive_snake_count(state);
 
     int snakebotCount;
     cin >> snakebotCount;
@@ -842,11 +837,12 @@ void parse_turn_inputs(State &state)
         string bodyStr;
         cin >> snakebotId >> bodyStr;
 
-        parse_snakebot(state, &my_snake_count, &opp_snake_count, snakebotId, bodyStr);
-    }
+        Snake &snake = get_snake(state, snakebotId);
+        int player_id = get_snake_player_id(snake);
+        add_player_alive_snake_id(state, player_id, snakebotId);
 
-    set_alive_snake_count(state, map_properties.my_id, my_snake_count);
-    set_alive_snake_count(state, map_properties.opp_id, opp_snake_count);
+        parse_snakebot(state, snake, snakebotId, bodyStr);
+    }
 }
 
 int main()
