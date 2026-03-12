@@ -386,6 +386,12 @@ int get_moveset_move_count(MoveSet &moveset) { return moveset.move_count; }
 void set_moveset_move(MoveSet &moveset, Move &move, int i) { moveset.moves[i] = move; }
 void set_moveset_move_count(MoveSet &moveset, int count) { moveset.move_count = count; }
 
+void print_moveset(MoveSet moveset)
+{
+    for (int i = 0; i < moveset.move_count; i++)
+        fprintf(stderr, "S=%d: %d %d / ", moveset.moves[i].snake_id, get_map_x(moveset.moves[i].dst_pos), get_map_y(moveset.moves[i].dst_pos));
+}
+
 /* --- TOOL FUNCTIONS --- */
 
 int get_opponent_id(const int player_id) { return 1 - player_id; }
@@ -472,7 +478,6 @@ int generate_player_movesets(State &state, int player_id, MoveSet movesets[])
     for (int i = 0; i < snake_count; i++)
     {
         int snake_id = get_player_alive_snake_id(state, player_id, i);
-        fprintf(stderr, "generate_player_movesets: Generating moves for snake %d\n", snake_id);
         Snake &snake = get_snake(state, snake_id);
 
         snake_ids[i] = snake_id;
@@ -549,38 +554,6 @@ int generate_player_movesets(State &state, int player_id, MoveSet movesets[])
 }
 
 /* --- GAME PHYSICS - APPLICATION --- */
-
-void move_snake_in_state(State &state, Snake &snake, Pos new_head_pos, bool eating_energy)
-{
-    if (!eating_energy)
-    {
-        // Clear the tail position (if not eating an energy)
-        Pos tail_pos = get_snake_body_pos(snake, get_snake_body_length(snake) - 1);
-        set_cell(state, tail_pos, CELL_EMPTY);
-    }
-
-    // Set the snake id in the new head
-    set_cell(state, new_head_pos, get_snake_id(snake));
-}
-
-void move_snake_to(Snake &snake, Pos new_head_pos, bool eating_energy)
-{
-    int body_length_to_move = get_snake_body_length(snake) - 1;
-    if (eating_energy)
-    {
-        // Move the whole body positions, instead of loosing the tail position
-        body_length_to_move = get_snake_body_length(snake);
-
-        // Increase snake length
-        set_snake_body_length(snake, get_snake_body_length(snake) + 1);
-    }
-
-    // Move the body positions
-    memcpy(&snake.body_pos[1], &snake.body_pos[0], sizeof(Pos) * body_length_to_move);
-
-    // Assign a new position to the head
-    set_snake_body_pos(snake, 0, new_head_pos);
-}
 
 void apply_move(State &state, Snake &snake, Move &move)
 {
@@ -678,7 +651,8 @@ void handle_snake_collisions(State &previous_state, State &state)
                     }
                     else
                     {
-                        fprintf(stderr, "Snake %d is colliding with snake %d\n", snake_id, snake2_id);
+                        // fprintf(stderr, "Snake %d is colliding with snake %d\n", snake_id, snake2_id);
+
                         // Reset snake positions from previous state (Except the tail because it's losing one length)
                         memcpy(&snake.body_pos, &get_snake(previous_state, snake_id).body_pos, sizeof(Pos) * get_snake_body_length(snake));
                     }
@@ -889,7 +863,6 @@ int find_closest_energy_cell(State &state, Pos start_pos, Pos &closest_energy_ce
 
 float evaluate_state(State &state, int player_id)
 {
-    fprintf(stderr, "evaluate_state(): Start, with %d snakes alive\n", get_player_alive_snake_count(state, player_id));
     int dist_sum = 0;
     for (int i = 0; i < get_player_alive_snake_count(state, player_id); i++)
     {
@@ -898,17 +871,13 @@ float evaluate_state(State &state, int player_id)
 
         Pos closest;
         int dist = find_closest_energy_cell(state, get_snake_head_pos(snake), closest);
-        fprintf(stderr, "evaluate_state(): Snake %d: closest energy cell is at %d %d with distance %d\n", snake_id, get_map_x(closest), get_map_y(closest), dist);
-        if (dist != -1)
+        if (dist == -1)
+            dist_sum += MAX_MAP_WIDTH + MAX_MAP_HEIGHT; // If no energy cell found, consider it very far
+        else
             dist_sum += dist;
     }
 
-    if (dist_sum == 0)
-    {
-        fprintf(stderr, "DIST SUMM 00 ????????\n");
-        return get_game_points(state);
-    }
-    return get_game_points(state) + 1.0/dist_sum;
+    return get_game_points(state) + 1.0 / dist_sum;
 }
 
 MoveSet choose_player_move_set(State &state, int player_id)
@@ -929,7 +898,9 @@ MoveSet choose_player_move_set(State &state, int player_id)
 
         if (best_evaluation < evaluation)
         {
-            fprintf(stderr, "New best moveset found with evaluation %f (previous best was %f)\n", evaluation, best_evaluation);
+            fprintf(stderr, "New best moveset found with evaluation %f: ", evaluation);
+            print_moveset(movesets[i]);
+            fprintf(stderr, "\n");
             best_evaluation = evaluation;
             best_moveset = movesets[i];
         }
@@ -939,68 +910,19 @@ MoveSet choose_player_move_set(State &state, int player_id)
     return best_moveset;
 }
 
-Pos choose_snake_dir(State &state, Snake &snake)
+void print_marks(State &state, MoveSet best_moveset)
 {
-    Pos snake_pos = get_snake_head_pos(snake);
-
-    Pos actions[3];
-    int action_count = generate_snake_moves(state, snake, actions);
-    fprintf(stderr, "choose_snake_dir(): Snake %d - %d actions generated\n", get_snake_id(snake), action_count);
-
-    State next_state;
-    Snake next_snake;
-
-    Pos closest = -1;
-    Pos best_closest = -1;
-    Pos best_action = -1;
-    int best_dist = 100000;
-    for (int i = 0; i < action_count; i++)
+    for (int i = 0; i < get_moveset_move_count(best_moveset); i++)
     {
-        // Reset states
-        memcpy(&next_state, &state, sizeof(State));
-        memcpy(&next_snake, &snake, sizeof(Snake));
+        Move &move = get_moveset_move(best_moveset, i);
+        int snake_id = get_move_snake_id(move);
+        Snake &snake = get_snake(state, snake_id);
 
-        bool eating_energy = get_cell(next_state, actions[i]) == CELL_ENERGY;
-        if (eating_energy)
-        {
-            best_dist = 0;
-            best_closest = actions[i];
-            best_action = actions[i];
-            break;
-        }
+        Pos closest;
+        int dist = find_closest_energy_cell(state, get_snake_head_pos(snake), closest);
 
-        // Move snake toward the new position
-        fprintf(stderr, "Move snake %d to %d %d\n", get_snake_id(next_snake), get_map_x(actions[i]), get_map_y(actions[i]));
-        move_snake_in_state(next_state, next_snake, actions[i], eating_energy);
-        move_snake_to(next_snake, actions[i], eating_energy);
-        // print_map(next_state, "Map after applying action");
-
-        apply_snake_gravity(next_state, next_snake);
-        // print_map(next_state, "Map after gravity");
-
-        update_game_points(next_state);
-
-        int dist = find_closest_energy_cell(next_state, get_snake_head_pos(next_snake), closest);
-        if (dist != -1 && dist < best_dist)
-        {
-            best_dist = dist;
-            best_closest = closest;
-            best_action = actions[i];
-            fprintf(stderr, "Snake %d find new best closest %d %d with dist %d !\n", get_snake_id(next_snake), get_map_x(best_action), get_map_y(best_action), dist);
-        }
+        cout << "MARK " << get_map_x(closest) << " " << get_map_y(closest) << ";";
     }
-
-    if (best_action == -1)
-    {
-        fprintf(stderr, "Snake %d is stuck !\n", get_snake_id(snake));
-        return 0;
-    }
-
-    if (best_closest != -1)
-    {
-        cout << "MARK " << get_map_x(best_closest) << " " << get_map_y(best_closest) << ";";
-    }
-    return best_action;
 }
 
 /* --- PARSING --- */
@@ -1141,6 +1063,9 @@ int main()
         // print_map_bfs_distances(state);
 
         MoveSet best_moveset = choose_player_move_set(state, map_properties.my_id);
+
+        print_marks(state, best_moveset);
+
         for (int i = 0; i < get_moveset_move_count(best_moveset); i++)
         {
             Move &move = get_moveset_move(best_moveset, i);
@@ -1167,30 +1092,6 @@ int main()
                 cout << ";";
         }
 
-        // for (int i = 0; i < get_player_alive_snake_count(state, map_properties.my_id); i++)
-        // {
-        //     int snake_id = get_player_alive_snake_id(state, map_properties.my_id, i);
-        //     Snake &snake = get_snake(state, snake_id);
-
-        //     Pos dir = choose_snake_dir(state, snake);
-
-        //     Pos snake_head = get_snake_head_pos(snake);
-        //     int dir_offset = dir - snake_head;
-
-        //     fprintf(stderr, "Snake %d: head %d %d, dir %d %d, dir_offset %d\n", snake_id, get_map_x(snake_head), get_map_y(snake_head), get_map_x(dir), get_map_y(dir), dir_offset);
-
-        //     if (dir_offset == NORTH_POS_OFFSET)
-        //         cout << snake_id << " UP";
-        //     else if (dir_offset == SOUTH_POS_OFFSET)
-        //         cout << snake_id << " DOWN";
-        //     else if (dir_offset == WEST_POS_OFFSET)
-        //         cout << snake_id << " LEFT";
-        //     else
-        //         cout << snake_id << " RIGHT";
-
-        //     if (i != get_player_alive_snake_count(state, map_properties.my_id) - 1)
-        //         cout << ";";
-        // }
         cout << endl;
     }
 
