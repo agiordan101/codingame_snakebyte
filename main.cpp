@@ -6,6 +6,7 @@
 //  v1.2 - Always select a valid action, even if no energy cell is found
 //  v1.3 - Add padding around map so all simulations work outside the map (BFS, collisions, gravity, beam search)
 // v2 - Evaluate all possible move combinaisons at current depth, using physics simulation (gravity + collisions) and an improved fitness function (Score diff + sum (Snake/Energy distances))
+//  v2.1 - Find best move set for the opponent first, then for the player in consequence
 // v3 - Add an opponent move choice before (The best base don heuristic)
 // v4 - Beam search : Strategy explained in README.md
 
@@ -85,7 +86,8 @@ Pos get_snake_body_pos(Snake &snake, int index) { return snake.body_pos[index]; 
 Pos get_snake_head_pos(Snake &snake) { return get_snake_body_pos(snake, 0); }
 Pos get_snake_body_length(Snake &snake) { return snake.body_length; }
 
-Pos set_snake_body_pos(Snake &snake, int index, Pos pos) { return snake.body_pos[index] = pos; }
+void set_snake_body_pos(Snake &snake, int index, Pos pos) { snake.body_pos[index] = pos; }
+void set_snake_body_length(Snake &snake, int length) { snake.body_length = length; }
 
 void add_body_pos(Snake &snake, Pos pos)
 {
@@ -112,12 +114,6 @@ void print_snake(Snake &snake)
         Pos body_pos = get_snake_body_pos(snake, i);
         fprintf(stderr, "  %d: (%d, %d)\n", i, get_map_x(body_pos), get_map_y(body_pos));
     }
-}
-
-void move_snake_to(Snake &snake, Pos new_head_pos)
-{
-    memcpy(&snake.body_pos[1], &snake.body_pos[0], sizeof(Pos) * (snake.body_length - 1));
-    set_snake_body_pos(snake, 0, new_head_pos);
 }
 
 /* --- STATE --- */
@@ -302,6 +298,34 @@ void print_map_bfs_distances(State &state)
     }
 }
 
+/* --- ACTION / MOVE --- */
+
+struct Move
+{
+    int snake_id;
+    Pos dst_pos;
+};
+
+int get_move_snake_id(Move &move) { return move.snake_id; }
+Pos get_move_dst_pos(Move &move) { return move.dst_pos; }
+
+void set_move_snake_id(Move &move, int id) { move.snake_id = id; }
+void set_move_dst_pos(Move &move, Pos pos) { move.dst_pos = pos; }
+
+constexpr int MAX_PLAYER_MOVE_SETS = 3 ^ MAX_PLAYER_SNAKE_COUNT; // Max move combinaisons for one player
+
+struct MoveSet
+{
+    Move moves[MAX_SNAKE_COUNT];
+    int move_count;
+};
+
+Move &get_moveset_move(MoveSet &moveset, int i) { return moveset.moves[i]; }
+int get_moveset_move_count(MoveSet &moveset) { return moveset.move_count; }
+
+void set_moveset_move(MoveSet &moveset, Move &move, int i) { moveset.moves[i] = move; }
+void set_moveset_move_count(MoveSet &moveset, int count) { moveset.move_count = count; }
+
 /* --- TOOL FUNCTIONS --- */
 
 int get_opponent_id(const int player_id) { return 1 - player_id; }
@@ -319,7 +343,7 @@ Pos get_west_pos(const Pos pos) { return pos + WEST_POS_OFFSET; }
 Pos get_east_pos(const Pos pos) { return pos + EAST_POS_OFFSET; }
 Pos get_south_pos(const Pos pos) { return pos + SOUTH_POS_OFFSET; }
 
-/* --- GAME PHYSICS --- */
+/* --- GAME PHYSICS - GENERATION --- */
 
 bool is_cell_walkable(int cell)
 {
@@ -331,7 +355,7 @@ bool is_cell_solid(int cell, int snake_id)
     return cell != snake_id && cell != CELL_EMPTY;
 }
 
-int generate_snake_actions(State &state, Snake &snake, Pos actions[4])
+int generate_snake_moves(State &state, Snake &snake, Pos moves[3])
 {
     Pos head_pos = get_snake_head_pos(snake);
 
@@ -348,7 +372,7 @@ int generate_snake_actions(State &state, Snake &snake, Pos actions[4])
         is_north_cell_out_of_bounds(head_pos),
         is_south_cell_out_of_bounds(head_pos)};
 
-    int action_count = 0;
+    int move_count = 0;
     for (int i = 0; i < 4; i++)
     {
         int neighbor = get_cell(state, neighbors[i]);
@@ -356,24 +380,152 @@ int generate_snake_actions(State &state, Snake &snake, Pos actions[4])
         // New valid cell if : In map & Not visited yet & Empty
         if (!neighbor_out_of_bounds[i] && is_cell_walkable(neighbor))
         {
-            actions[action_count++] = neighbors[i];
+            moves[move_count++] = neighbors[i];
         }
     }
 
-    return action_count;
+    if (move_count == 0)
+    {
+        fprintf(stderr, "Snake head pos: %d %d\n", get_map_x(head_pos), get_map_y(head_pos));
+        for (int i = 0; i < 4; i++)
+        {
+            int neighbor = get_cell(state, neighbors[i]);
+            fprintf(stderr, "Neighbor %d: Pos=%d %d - Cell=%d - OofB=%d - Walkable=%d\n", i, get_map_x(neighbors[i]), get_map_y(neighbors[i]), neighbor, neighbor_out_of_bounds[i], is_cell_walkable(neighbor));
+        }
+
+        for (int body_idx = 0; body_idx < snake.body_length; body_idx++)
+        {
+            Pos body_pos = snake.body_pos[body_idx];
+            fprintf(stderr, "Body %d: %d %d\n", body_idx, get_map_x(body_pos), get_map_y(body_pos));
+        }
+
+        // TODO: If no move generated, create the default one: Continue forward
+        print_map(state, "No move generated for snake");
+    }
+
+    return move_count;
 }
 
-void move_snake_in_state(State &state, Snake &snake, Pos new_head_pos)
+int generate_player_movesets(State &state, int player_id, MoveSet movesets[])
 {
-    fprintf(stderr, "Move snake %d to %d %d\n", get_snake_id(snake), get_map_x(new_head_pos), get_map_y(new_head_pos));
+    int snake_count = get_player_alive_snake_count(state, player_id);
+    int snake_ids[snake_count];
 
-    // Clear the tail position and set the snake id in the new head
-    Pos tail_pos = get_snake_body_pos(snake, get_snake_body_length(snake) - 1);
-    set_cell(state, tail_pos, CELL_EMPTY);
+    int snake_move_counts[snake_count];
+    Pos snake_moves[snake_count][3];
+
+    // Generate moves for all snakes
+    for (int i = 0; i < snake_count; i++)
+    {
+        int snake_id = get_player_alive_snake_id(state, player_id, i);
+        fprintf(stderr, "generate_player_movesets: Generating moves for snake %d\n", snake_id);
+        Snake &snake = get_snake(state, snake_id);
+
+        snake_ids[i] = snake_id;
+        snake_move_counts[i] = generate_snake_moves(state, snake, snake_moves[i]);
+    }
+
+    // The idea is to generate all possible combinations of moves for each snake :
+    // Example: snake 0 has 3 moves, snake 1 has 2 moves -> generates 3*2=6 movesets
+
+    // Initialize indices to track which move to use for each snake
+    int snake_move_indices[snake_count];
+    for (int i = 0; i < snake_count; i++)
+    {
+        snake_move_indices[i] = 0; // Start with first move for each snake
+    }
+
+    int moveset_count = 0;
+    while (true)
+    {
+        // Create a moveset with the current combination of moves
+        MoveSet moveset;
+        moveset.move_count = snake_count;
+
+        // For each snake, add its current move to the moveset
+        for (int i = 0; i < snake_count; i++)
+        {
+            Move &move = get_moveset_move(moveset, i);
+            set_move_snake_id(move, snake_ids[i]);
+            set_move_dst_pos(move, snake_moves[i][snake_move_indices[i]]);
+        }
+
+        movesets[moveset_count++] = moveset;
+
+        // Increment indices like a mixed-radix counter : Exactly like counting, but each digit has different base
+        // The rightmost digit increments first, carrying left when it overflows
+
+        // Example if snake 0 has 3 moves, snake 1 has 2 moves :
+        // 00 -> 01 -> 10 -> 11 -> 20 -> 21
+        int carry = 1;
+        for (int i = snake_count - 1; i >= 0 && carry; i--)
+        {
+            snake_move_indices[i]++;
+            // Check if this digit overflowed its base (snake_move_counts[i])
+            if (snake_move_indices[i] >= snake_move_counts[i])
+            {
+                // Reset to 0 and carry to next digit because the digit overflowed
+                snake_move_indices[i] = 0;
+            }
+            else
+            {
+                carry = 0; // No carry needed, done incrementing
+            }
+        }
+
+        // If carry is still 1, we've cycled through all combinations
+        if (carry)
+            break;
+    }
+
+    // fprintf(stderr, "generate_player_movesets: %d snakes :\n", snake_count);
+    // for (int i = 0; i < snake_count; i++)
+    //     fprintf(stderr, "generate_player_movesets: - Snake %d: %d moves\n", i, snake_move_counts[i]);
+
+    // fprintf(stderr, "generate_player_movesets: %d movesets generated :\n", moveset_count);
+    // for (int moveset_index = 0; moveset_index < moveset_count; moveset_index++)
+    // {
+    //     for (int snake_index = 0; snake_index < snake_count; snake_index++)
+    //     {
+    //         fprintf(stderr, "generate_player_movesets: - Move %d: Snake %d: %d %d\n", moveset_index, snake_index, get_map_x(movesets[moveset_index].moves[snake_index].dst_pos), get_map_y(movesets[moveset_index].moves[snake_index].dst_pos));
+    //     }
+    // }
+
+    return moveset_count;
+}
+
+/* --- GAME PHYSICS - APPLICATION --- */
+
+void move_snake_in_state(State &state, Snake &snake, Pos new_head_pos, bool eating_energy)
+{
+    if (!eating_energy)
+    {
+        // Clear the tail position (if not eating an energy)
+        Pos tail_pos = get_snake_body_pos(snake, get_snake_body_length(snake) - 1);
+        set_cell(state, tail_pos, CELL_EMPTY);
+    }
+
+    // Set the snake id in the new head
     set_cell(state, new_head_pos, get_snake_id(snake));
+}
 
-    // Move the whole snake toward the new position
-    move_snake_to(snake, new_head_pos);
+void move_snake_to(Snake &snake, Pos new_head_pos, bool eating_energy)
+{
+    int body_length_to_move = snake.body_length - 1;
+    if (eating_energy)
+    {
+        // Move the whole body positions, instead of loosing the tail position
+        body_length_to_move = snake.body_length;
+
+        // Increase snake length
+        set_snake_body_length(snake, snake.body_length + 1);
+    }
+
+    // Move the body positions
+    memcpy(&snake.body_pos[1], &snake.body_pos[0], sizeof(Pos) * body_length_to_move);
+
+    // Assign a new position to the head
+    set_snake_body_pos(snake, 0, new_head_pos);
 }
 
 void apply_gravity(State &state, Snake &snake)
@@ -382,7 +534,8 @@ void apply_gravity(State &state, Snake &snake)
     int snake_body_length = get_snake_body_length(snake);
     Pos new_snake_positions[snake_body_length];
 
-    while (true)
+    int y = 0;
+    while (y++ < MAX_HEIGHT)
     {
         // Verify if snake has one solid cell under it
         for (int i = 0; i < snake_body_length; i++)
@@ -398,8 +551,6 @@ void apply_gravity(State &state, Snake &snake)
             new_snake_positions[i] = pos_below;
         }
 
-        fprintf(stderr, "Snake %d is falling\n", snake_id);
-
         // If not, remove snake from state
         for (int i = 0; i < snake_body_length; i++)
             set_cell(state, get_snake_body_pos(snake, i), CELL_EMPTY);
@@ -412,6 +563,10 @@ void apply_gravity(State &state, Snake &snake)
         }
     }
 }
+
+// void apply_moveset(State &state, MoveSet &moveset)
+// {
+// }
 
 /* --- BFS --- */
 
@@ -487,12 +642,20 @@ int find_closest_energy_cell(State &state, Pos start_pos, Pos &closest_energy_ce
 
 /* --- DECISION MAKING --- */
 
+MoveSet choose_player_move_set(State &state, int player_id)
+{
+    MoveSet movesets[MAX_PLAYER_MOVE_SETS];
+    int moveset_count = generate_player_movesets(state, player_id, movesets);
+
+    return movesets[0];
+}
+
 Pos choose_snake_dir(State &state, Snake &snake)
 {
     Pos snake_pos = get_snake_head_pos(snake);
 
-    Pos actions[4];
-    int action_count = generate_snake_actions(state, snake, actions);
+    Pos actions[3];
+    int action_count = generate_snake_moves(state, snake, actions);
     fprintf(stderr, "choose_snake_dir(): Snake %d - %d actions generated\n", get_snake_id(snake), action_count);
 
     State next_state;
@@ -504,7 +667,12 @@ Pos choose_snake_dir(State &state, Snake &snake)
     int best_dist = 100000;
     for (int i = 0; i < action_count; i++)
     {
-        if (get_cell(state, actions[i]) == CELL_ENERGY)
+        // Reset states
+        memcpy(&next_state, &state, sizeof(State));
+        memcpy(&next_snake, &snake, sizeof(Snake));
+
+        bool eating_energy = get_cell(next_state, actions[i]) == CELL_ENERGY;
+        if (eating_energy)
         {
             best_dist = 0;
             best_closest = actions[i];
@@ -512,11 +680,10 @@ Pos choose_snake_dir(State &state, Snake &snake)
             break;
         }
 
-        // Reset states
-        memcpy(&next_state, &state, sizeof(State));
-        memcpy(&next_snake, &snake, sizeof(Snake));
-
-        move_snake_in_state(next_state, next_snake, actions[i]);
+        // Move snake toward the new position
+        fprintf(stderr, "Move snake %d to %d %d\n", get_snake_id(next_snake), get_map_x(actions[i]), get_map_y(actions[i]));
+        move_snake_in_state(next_state, next_snake, actions[i], eating_energy);
+        move_snake_to(next_snake, actions[i], eating_energy);
         // print_map(next_state, "Map after applying action");
 
         apply_gravity(next_state, next_snake);
@@ -700,12 +867,15 @@ int main()
         // print_map(state, "Turn beginning");
         // print_map_bfs_distances(state);
 
+        // MoveSet best_moveset = choose_player_move_set(state, map_properties.my_id);
+
         for (int i = 0; i < get_player_alive_snake_count(state, map_properties.my_id); i++)
         {
             int snake_id = get_player_alive_snake_id(state, map_properties.my_id, i);
             Snake &snake = get_snake(state, snake_id);
 
             Pos dir = choose_snake_dir(state, snake);
+
             Pos snake_head = get_snake_head_pos(snake);
             int dir_offset = dir - snake_head;
 
