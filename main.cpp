@@ -87,7 +87,7 @@ int get_snake_id(Snake &snake) { return snake.id; }
 int get_snake_player_id(Snake &snake) { return snake.player_id; }
 Pos get_snake_body_pos(Snake &snake, int index) { return snake.body_pos[index]; }
 Pos get_snake_head_pos(Snake &snake) { return get_snake_body_pos(snake, 0); }
-Pos get_snake_body_length(Snake &snake) { return snake.body_length; }
+int get_snake_body_length(Snake &snake) { return snake.body_length; }
 
 void set_snake_body_pos(Snake &snake, int index, Pos pos) { snake.body_pos[index] = pos; }
 void set_snake_body_length(Snake &snake, int length) { snake.body_length = length; }
@@ -142,7 +142,8 @@ constexpr int MAX_SNAKE_COUNT = 8;
 constexpr int MAX_PLAYER_SNAKE_COUNT = MAX_SNAKE_COUNT / 2;
 constexpr int MIN_SNAKE_ID = 1;
 
-constexpr int MAX_ACTION_COUNT = 3 ^ MAX_SNAKE_COUNT;
+constexpr int constexpr_pow(int base, int exp) { return exp == 0 ? 1 : base * constexpr_pow(base, exp - 1); }
+constexpr int MAX_ACTION_COUNT = constexpr_pow(3, MAX_SNAKE_COUNT);
 
 constexpr int CELL_EMPTY = 8;
 constexpr int CELL_PLATFORM = 9;
@@ -371,7 +372,7 @@ Pos get_move_dst_pos(Move &move) { return move.dst_pos; }
 void set_move_snake_id(Move &move, int id) { move.snake_id = id; }
 void set_move_dst_pos(Move &move, Pos pos) { move.dst_pos = pos; }
 
-constexpr int MAX_PLAYER_MOVE_SETS = 3 ^ MAX_PLAYER_SNAKE_COUNT; // Max move combinaisons for one player
+constexpr int MAX_PLAYER_MOVE_SETS = constexpr_pow(3, MAX_PLAYER_SNAKE_COUNT); // Max move combinaisons for one player
 
 struct MoveSet
 {
