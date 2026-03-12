@@ -453,7 +453,7 @@ int generate_snake_moves(State &state, Snake &snake, Pos moves[3])
             fprintf(stderr, "Neighbor %d: Pos=%d %d - Cell=%d - OofB=%d - Walkable=%d\n", i, get_map_x(neighbors[i]), get_map_y(neighbors[i]), neighbor, neighbor_out_of_bounds[i], is_cell_walkable(neighbor));
         }
 
-        for (int body_idx = 0; body_idx < snake.body_length; body_idx++)
+        for (int body_idx = 0; body_idx < get_snake_body_length(snake); body_idx++)
         {
             Pos body_pos = snake.body_pos[body_idx];
             fprintf(stderr, "Body %d: %d %d\n", body_idx, get_map_x(body_pos), get_map_y(body_pos));
@@ -571,14 +571,14 @@ void move_snake_in_state(State &state, Snake &snake, Pos new_head_pos, bool eati
 
 void move_snake_to(Snake &snake, Pos new_head_pos, bool eating_energy)
 {
-    int body_length_to_move = snake.body_length - 1;
+    int body_length_to_move = get_snake_body_length(snake) - 1;
     if (eating_energy)
     {
         // Move the whole body positions, instead of loosing the tail position
-        body_length_to_move = snake.body_length;
+        body_length_to_move = get_snake_body_length(snake);
 
         // Increase snake length
-        set_snake_body_length(snake, snake.body_length + 1);
+        set_snake_body_length(snake, get_snake_body_length(snake) + 1);
     }
 
     // Move the body positions
@@ -601,13 +601,13 @@ void apply_move(State &state, Snake &snake, Move &move)
         set_snake_colliding(snake);
 
         // Decrease snake length
-        set_snake_body_length(snake, snake.body_length - 1);
+        set_snake_body_length(snake, get_snake_body_length(snake) - 1);
 
         // Body positions remain the same
     }
     else
     {
-        int body_length_to_move = snake.body_length - 1;
+        int body_length_to_move = get_snake_body_length(snake) - 1;
 
         bool is_eating = cell_at_new_head_pos == CELL_ENERGY;
         if (is_eating)
@@ -616,10 +616,10 @@ void apply_move(State &state, Snake &snake, Move &move)
             set_cell(state, new_head_pos, CELL_EMPTY); // Remove the energy cel (even if two snakes will collide on it)
 
             // Move the whole body positions, instead of loosing the tail position
-            body_length_to_move = snake.body_length;
+            body_length_to_move = get_snake_body_length(snake);
 
             // Increase snake length
-            set_snake_body_length(snake, snake.body_length + 1);
+            set_snake_body_length(snake, get_snake_body_length(snake) + 1);
         }
 
         // Move the body positions
