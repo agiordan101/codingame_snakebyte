@@ -759,6 +759,8 @@ bool apply_snake_gravity(State &state, Snake &snake)
             new_snake_positions[i] = pos_below;
         }
 
+        // TODO: Kill the snake if it fall under the map
+
         gravity_applied = true;
 
         // If not, remove snake from state
@@ -811,6 +813,8 @@ void apply_moveset(State &previous_state, State &state, MoveSet &moveset)
     // Update cells from snake positions and apply gravity on them
     update_cells_after_snake_moves(previous_state, state);
     apply_gravity(state);
+
+    update_game_points(state);
 }
 
 /* --- BFS --- */
@@ -871,6 +875,7 @@ int find_closest_energy_cell_recursive(State &state, queue<pair<Pos, int>> &bfs_
 int find_closest_energy_cell(State &state, Pos start_pos, Pos &closest_energy_cell_pos)
 {
     // Check if the starting position is an energy cell
+    // useless
     if (get_cell(state, start_pos) == CELL_ENERGY)
     {
         closest_energy_cell_pos = start_pos;
@@ -889,6 +894,7 @@ int find_closest_energy_cell(State &state, Pos start_pos, Pos &closest_energy_ce
 
 float evaluate_state(State &state, int player_id)
 {
+    fprintf(stderr, "evaluate_state(): Start, with %d snakes alive\n", get_player_alive_snake_count(state, player_id));
     int dist_sum = 0;
     for (int i = 0; i < get_player_alive_snake_count(state, player_id); i++)
     {
@@ -897,6 +903,7 @@ float evaluate_state(State &state, int player_id)
 
         Pos closest;
         int dist = find_closest_energy_cell(state, get_snake_head_pos(snake), closest);
+        fprintf(stderr, "evaluate_state(): Snake %d: closest energy cell is at %d %d with distance %d\n", snake_id, get_map_x(closest), get_map_y(closest), dist);
         if (dist != -1)
             dist_sum += dist;
     }
