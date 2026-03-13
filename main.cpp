@@ -1,4 +1,4 @@
-// Version 2.1
+// Version 2.1.1
 
 // Algorithms :
 // v1 - Each snakes go to closest Energy cell using BFS
@@ -7,6 +7,7 @@
 //  v1.3 - Add padding around map so all simulations work outside the map (BFS, etc...)
 // v2 - Evaluate all possible move combinaisons at current depth, using physics simulation (gravity + collisions) and an improved fitness function (Score diff + sum (Snake/Energy distances))
 //  v2.1 - Find best move set for the opponent first, then for the player in consequence
+//  v2.1.1 - Apply turn moveset in each simulation & Fix collisions simulation & Fix cells application
 // v3 - Add an opponent move choice before (The best base don heuristic)
 // v4 - Beam search : Strategy explained in README.md
 
@@ -101,6 +102,11 @@ void reset_snake_state(Snake &snake)
 void add_body_pos(Snake &snake, Pos pos)
 {
     snake.body_pos[snake.body_length++] = pos;
+}
+void remove_snake_head(Snake &snake)
+{
+    // Shift all body positions to the left, removing the head pos, and decreasing the body length by 1
+    memcpy(&snake.body_pos[0], &snake.body_pos[1], sizeof(Pos) * (--snake.body_length));
 }
 void reset_snake_length(Snake &snake) { snake.body_length = 0; }
 
@@ -545,6 +551,26 @@ int generate_player_movesets(State &state, int player_id, MoveSet movesets[])
 
 /* --- GAME PHYSICS - APPLICATION --- */
 
+MoveSet merge_movesets(MoveSet &moveset1, MoveSet &moveset2)
+{
+    MoveSet merged_moveset;
+    int moveset1_move_count = get_moveset_move_count(moveset1);
+    int moveset2_move_count = get_moveset_move_count(moveset2);
+
+    // Add moves from moveset1
+    for (int i = 0; i < moveset1_move_count; i++)
+        set_moveset_move(merged_moveset, get_moveset_move(moveset1, i), i);
+
+    // Add moves from moveset2
+    for (int i = 0; i < moveset2_move_count; i++)    {
+        set_moveset_move(merged_moveset, get_moveset_move(moveset2, i), moveset1_move_count + i);
+    }
+
+    set_moveset_move_count(merged_moveset, moveset1_move_count + moveset2_move_count);
+
+    return merged_moveset;
+}
+
 void apply_move(State &state, Snake &snake, Move &move)
 {
     // fprintf(stderr, "Applying move for snake %d: (%d, %d)\n", get_snake_id(snake), get_map_x(get_move_dst_pos(move)), get_map_y(get_move_dst_pos(move)));
@@ -594,25 +620,25 @@ void apply_all_moves(State &state, MoveSet &moveset)
     }
 }
 
-void handle_snake_collisions(State &previous_state, State &state)
+void handle_snake_collisions(State &colliding_state, State &resolved_state)
 {
     // fprintf(stderr, "handle_snake_collisions() ...\n");
 
-    for (int snake_index = 0; snake_index < get_alive_snake_count(state); snake_index++)
+    for (int snake_index = 0; snake_index < get_alive_snake_count(colliding_state); snake_index++)
     {
         // Iter over all alive snakes
-        int snake_id = get_alive_snake_id(state, snake_index);
-        Snake &snake = get_snake(state, snake_id);
+        int snake_id = get_alive_snake_id(colliding_state, snake_index);
+        Snake &snake = get_snake(colliding_state, snake_id);
         Pos snake_head_pos = get_snake_head_pos(snake);
 
-        for (int snake2_index = 0; snake2_index < get_alive_snake_count(state); snake2_index++)
+        for (int snake2_index = 0; snake2_index < get_alive_snake_count(colliding_state); snake2_index++)
         {
             if (snake_index == snake2_index)
                 continue; // Don't check collision with itself
 
             // Iter over all other alive snakes
-            int snake2_id = get_alive_snake_id(state, snake2_index);
-            Snake &snake2 = get_snake(state, snake2_id);
+            int snake2_id = get_alive_snake_id(colliding_state, snake2_index);
+            Snake &snake2 = get_snake(colliding_state, snake2_id);
 
             // Check if snake head is colliding with snake2 body
             for (int body_idx = 0; body_idx < get_snake_body_length(snake2); body_idx++)
@@ -620,23 +646,20 @@ void handle_snake_collisions(State &previous_state, State &state)
                 Pos snake2_body_pos = get_snake_body_pos(snake2, body_idx);
                 if (snake_head_pos == snake2_body_pos)
                 {
-                    // Decrease its length by 1
-                    set_snake_body_length(snake, get_snake_body_length(snake) - 1);
+                    fprintf(stderr, "Snake %d is colliding with snake %d\n", snake_id, snake2_id);
+                    Snake& future_snake = get_snake(resolved_state, snake_id);
 
-                    if (get_snake_body_length(snake) < 3)
+                    if (get_snake_body_length(future_snake) - 1 < 3)
                     {
                         fprintf(stderr, "Snake %d is dying\n", snake_id);
                         // We can't remove it from alive snakes list now, so mark it dying for later
-                        set_snake_dying(snake);
+                        set_snake_dying(future_snake);
                     }
                     else
                     {
-                        // fprintf(stderr, "Snake %d is colliding with snake %d\n", snake_id, snake2_id);
-
-                        // Reset snake positions from previous state (Except the tail because it's losing one length)
-                        memcpy(&snake.body_pos, &get_snake(previous_state, snake_id).body_pos, sizeof(Pos) * get_snake_body_length(snake));
+                        remove_snake_head(future_snake);
+                        // print_snake(future_snake);
                     }
-                    return;
                 }
             }
         }
@@ -655,9 +678,10 @@ void kill_dying_snakes(State &state)
     }
 }
 
-void update_cells_after_snake_moves(State &previous_state, State &state)
+void remove_snake_in_cells_from_their_old_positions(State &previous_state, State &state)
 {
-    // Remove all snakes from their old positions
+    // State cells must be the same as previous state cells
+    // But snake spositions are differents, so we use the previous state snakes to remove snkaes from actual state cells
     for (int i = 0; i < get_alive_snake_count(previous_state); i++)
     {
         int snake_id = get_alive_snake_id(previous_state, i);
@@ -669,8 +693,10 @@ void update_cells_after_snake_moves(State &previous_state, State &state)
             set_cell(state, body_pos, CELL_EMPTY);
         }
     }
+}
 
-    // Set all snakes to their new positions
+void set_snake_in_cells(State &state)
+{
     for (int i = 0; i < get_alive_snake_count(state); i++)
     {
         int snake_id = get_alive_snake_id(state, i);
@@ -751,19 +777,29 @@ void apply_gravity(State &state)
 void apply_moveset(State &previous_state, State &state, MoveSet &moveset)
 {
     // fprintf(stderr, "Applying moveset ...\n");
-
-    // reset_snake_bodies(state);
     apply_all_moves(state, moveset);
 
+    // To not corrupt data we need to keep the collisions intact in colliding_state, and apply the collisions in another state
+    State colliding_state;
+    memcpy(&colliding_state, &state, sizeof(State));
+    
     // Reset snake positions if we find a collision & Find dying snakes
-    handle_snake_collisions(previous_state, state);
+    handle_snake_collisions(colliding_state, state);
+
+    // Update cells with new snake positions (Removing dying snkaes from cells)
+    remove_snake_in_cells_from_their_old_positions(previous_state, state);
     kill_dying_snakes(state);
+    set_snake_in_cells(state);
 
-    // Update cells from snake positions and apply gravity on them
-    update_cells_after_snake_moves(previous_state, state);
     apply_gravity(state);
-
+    
     update_game_points(state);
+
+    // if (moveset.moves[0].dst_pos == get_pos_from_map_coord(9, 6))
+    // {
+    //     fprintf(stderr, "Game points != 0 after apply_gravity: %d\n", state.game_points);
+    //     print_map(state, "State after apply_gravity:");
+    // }
 }
 
 /* --- BFS --- */
@@ -864,9 +900,10 @@ float evaluate_state(State &state, int player_id)
     return -get_game_points(state) + 1.0 / dist_sum;
 }
 
-MoveSet choose_player_move_set(State &state, int player_id)
+MoveSet choose_player_move_set(State &state, int player_id, MoveSet &previous_player_moveset)
 {
     State next_state;
+    fprintf(stderr, "Choosing move set for player %d ...\n", player_id);
 
     MoveSet movesets[MAX_PLAYER_MOVE_SETS];
     int moveset_count = generate_player_movesets(state, player_id, movesets);
@@ -877,14 +914,18 @@ MoveSet choose_player_move_set(State &state, int player_id)
     {
         memcpy(&next_state, &state, sizeof(State));
 
-        apply_moveset(state, next_state, movesets[i]);
-        float evaluation = evaluate_state(next_state, player_id);
+        MoveSet turn_moveset = merge_movesets(previous_player_moveset, movesets[i]);
+        apply_moveset(state, next_state, turn_moveset);
 
+        float evaluation = evaluate_state(next_state, player_id);
         if (best_evaluation < evaluation)
         {
-            fprintf(stderr, "New best moveset found with evaluation %f: ", evaluation);
-            print_moveset(movesets[i]);
+            fprintf(stderr, "New best moveset found for player %d with evaluation %f: ", player_id, evaluation);
+            print_moveset(turn_moveset);
             fprintf(stderr, "\n");
+
+            // print_map(next_state, "New best state :\n");
+
             best_evaluation = evaluation;
             best_moveset = movesets[i];
         }
@@ -1046,11 +1087,11 @@ int main()
         // print_map(state, "Turn beginning");
         // print_map_bfs_distances(state);
 
-        MoveSet best_opponent_moveset = choose_player_move_set(state, map_properties.opp_id);
+        MoveSet turn_beginning_movesets = {};
+        set_moveset_move_count(turn_beginning_movesets, 0);
 
-        apply_moveset(state, state, best_opponent_moveset);
-
-        MoveSet best_moveset = choose_player_move_set(state, map_properties.my_id);
+        MoveSet best_opponent_moveset = choose_player_move_set(state, map_properties.opp_id, turn_beginning_movesets);
+        MoveSet best_moveset = choose_player_move_set(state, map_properties.my_id, best_opponent_moveset);
 
         print_marks(state, best_moveset);
 

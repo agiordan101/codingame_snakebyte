@@ -3,6 +3,17 @@ Winter Challenge 2026
 
 # TODO
 
+- Timout crash !
+- A faire après le beam search, pour correctement évaluer l'amélioration du ratio temps/précision de l'heuristic : Faire un nouveau DFS qui prends en compte la gravité et son body :
+    On prends l'état actuel
+    On fait bouger que ce snake
+    en v1: On considère une seule fois les cases où la tête est passée
+    en v1: On shift les pos du body ?
+- Collisions :
+  Plutot que d'avoir un state previous ou resolved et dying flag on ourrait :
+  renvoyer une liste des snake qui collide dans handle_snake_collisions (donc avoir 1 seul state en param)
+. Ensuite remove head et kill les snake directement dans la même fonction 
+
 - Problème dans le game score après dying ?
     Diff de score à 4 alors que il n'y a que 3.
 
