@@ -1,10 +1,10 @@
-// Version 2
+// Version 2.1
 
 // Algorithms :
 // v1 - Each snakes go to closest Energy cell using BFS
 //  v1.1 - Apply Action + Gravity first, and then use BFS value
 //  v1.2 - Always select a valid action, even if no energy cell is found
-//  v1.3 - Add padding around map so all simulations work outside the map (BFS, collisions, gravity, beam search)
+//  v1.3 - Add padding around map so all simulations work outside the map (BFS, etc...)
 // v2 - Evaluate all possible move combinaisons at current depth, using physics simulation (gravity + collisions) and an improved fitness function (Score diff + sum (Snake/Energy distances))
 //  v2.1 - Find best move set for the opponent first, then for the player in consequence
 // v3 - Add an opponent move choice before (The best base don heuristic)
@@ -587,10 +587,9 @@ void apply_all_moves(State &state, MoveSet &moveset)
     for (int i = 0; i < get_moveset_move_count(moveset); i++)
     {
         Move &move = get_moveset_move(moveset, i);
-
         Snake &snake = get_snake(state, get_move_snake_id(move));
-        reset_snake_state(snake);
 
+        reset_snake_state(snake);
         apply_move(state, snake, move);
     }
 }
@@ -858,7 +857,11 @@ float evaluate_state(State &state, int player_id)
             dist_sum += dist;
     }
 
-    return get_game_points(state) + 1.0 / dist_sum;
+    if (player_id == map_properties.my_id)
+        return get_game_points(state) + 1.0 / dist_sum;
+
+    // Game points is positive if it's good for my player, negative if it's good for opponent, so we invert it for opponent evaluation
+    return -get_game_points(state) + 1.0 / dist_sum;
 }
 
 MoveSet choose_player_move_set(State &state, int player_id)
@@ -1042,6 +1045,10 @@ int main()
         // print_cells(state, "Turn beginning");
         // print_map(state, "Turn beginning");
         // print_map_bfs_distances(state);
+
+        MoveSet best_opponent_moveset = choose_player_move_set(state, map_properties.opp_id);
+
+        apply_moveset(state, state, best_opponent_moveset);
 
         MoveSet best_moveset = choose_player_move_set(state, map_properties.my_id);
 

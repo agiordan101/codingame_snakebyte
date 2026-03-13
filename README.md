@@ -3,7 +3,8 @@ Winter Challenge 2026
 
 # TODO
 
-- 
+- Problème dans le game score après dying ?
+    Diff de score à 4 alors que il n'y a que 3.
 
 ## Strategies
 
@@ -70,13 +71,29 @@ ActionSet -> A history of TurnMoveSet representing game turns
 
 ## History
 
+# v2.1
+
++ Find best move set for the opponent first, then for the player in consequence
+
+League: Silver (max)
+Begin at position : 330/1450
+Ending at position: -/-
+
+# v2
+
+Evaluate all possible move combinaisons at current depth, using physics simulation (gravity + collisions) and an improved fitness function (Score diff + sum (Snake/Energy distances))
+
+League: Silver (max)
+Begin at position : 330/1450
+Ending at position: 364/1450
+
 # v1.3
 
-+ Add padding around map so all simulations work outside the map (BFS, collisions, gravity, beam search)
++ Add padding around map so all simulations work outside the map (BFS, etc...)
 
 League: Silver (max)
 Begin at position : 192/1206
-Ending at position: 442/1446
+Ending at position: 317/1450
 
 # v1.2
 
