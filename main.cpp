@@ -194,7 +194,7 @@ void add_player_alive_snake_id(State &state, int player_id, int snake_id)
     state.alive_snake_ids[state.alive_snake_count++] = snake_id;
     state.player_alive_snake_ids[player_id][state.player_alive_snake_count[player_id]++] = snake_id;
 }
-void remove_snake_from_alive_snake_ids(State &state, int snake_id)
+void remove_snake_from_alive_snake_ids(State &state, int snake_id, int player_id)
 {
     int snake_index = -1;
     for (int i = 0; i < state.alive_snake_count; i++)
@@ -202,8 +202,19 @@ void remove_snake_from_alive_snake_ids(State &state, int snake_id)
         if (state.alive_snake_ids[i] == snake_id)
         {
             // Remove the snake id from alive_snake_ids by shifting the rest of the array
-            memcpy(&state.alive_snake_ids[i], &state.alive_snake_ids[i + 1], sizeof(int) * (state.alive_snake_count - i - 1));
+            memmove(&state.alive_snake_ids[i], &state.alive_snake_ids[i + 1], sizeof(int) * (state.alive_snake_count - i - 1));
             state.alive_snake_count--;
+        }
+    }
+
+    // Remove the snake from the player's alive snake ids
+    for (int i = 0; i < state.player_alive_snake_count[player_id]; i++)
+    {
+        if (state.player_alive_snake_ids[player_id][i] == snake_id)
+        {
+            // Remove the snake id from alive_snake_ids by shifting the rest of the array
+            memmove(&state.player_alive_snake_ids[player_id][i], &state.player_alive_snake_ids[player_id][i + 1], sizeof(int) * (state.player_alive_snake_count[player_id] - i - 1));
+            state.player_alive_snake_count[player_id]--;
             return;
         }
     }
@@ -646,12 +657,12 @@ void handle_snake_collisions(State &colliding_state, State &resolved_state)
                 Pos snake2_body_pos = get_snake_body_pos(snake2, body_idx);
                 if (snake_head_pos == snake2_body_pos)
                 {
-                    fprintf(stderr, "Snake %d is colliding with snake %d\n", snake_id, snake2_id);
+                    // fprintf(stderr, "Snake %d is colliding with snake %d\n", snake_id, snake2_id);
                     Snake& future_snake = get_snake(resolved_state, snake_id);
 
                     if (get_snake_body_length(future_snake) - 1 < 3)
                     {
-                        fprintf(stderr, "Snake %d is dying\n", snake_id);
+                        // fprintf(stderr, "Snake %d is dying\n", snake_id);
                         // We can't remove it from alive snakes list now, so mark it dying for later
                         set_snake_dying(future_snake);
                     }
@@ -674,7 +685,7 @@ void kill_dying_snakes(State &state)
         Snake &snake = get_snake(state, snake_id);
 
         if (is_snake_dying(snake))
-            remove_snake_from_alive_snake_ids(state, snake_id);
+            remove_snake_from_alive_snake_ids(state, snake_id, get_snake_player_id(snake));
     }
 }
 
