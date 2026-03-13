@@ -106,7 +106,7 @@ void add_body_pos(Snake &snake, Pos pos)
 void remove_snake_head(Snake &snake)
 {
     // Shift all body positions to the left, removing the head pos, and decreasing the body length by 1
-    memcpy(&snake.body_pos[0], &snake.body_pos[1], sizeof(Pos) * (--snake.body_length));
+    memmove(&snake.body_pos[0], &snake.body_pos[1], sizeof(Pos) * (--snake.body_length));
 }
 void reset_snake_length(Snake &snake) { snake.body_length = 0; }
 
@@ -600,8 +600,8 @@ void apply_move(State &state, Snake &snake, Move &move)
             set_snake_body_length(snake, get_snake_body_length(snake) + 1);
         }
 
-        // Move the body positions
-        memcpy(&snake.body_pos[1], &snake.body_pos[0], sizeof(Pos) * body_length_to_move);
+        // Move the body positions (memmove because source and dest overlap)
+        memmove(&snake.body_pos[1], &snake.body_pos[0], sizeof(Pos) * body_length_to_move);
 
         // Assign a new position to the head
         set_snake_body_pos(snake, 0, new_head_pos);
