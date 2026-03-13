@@ -7,7 +7,11 @@
 //  v1.3 - Add padding around map so all simulations work outside the map (BFS, etc...)
 // v2 - Evaluate all possible move combinaisons at current depth, using physics simulation (gravity + collisions) and an improved fitness function (Score diff + sum (Snake/Energy distances))
 //  v2.1 - Find best move set for the opponent first, then for the player in consequence
-//  v2.1.1 - Apply turn moveset in each simulation & Fix collisions simulation & Fix cells application
+//   v2.1.1 - Apply turn moveset in each simulation
+//          - Fix collisions simulation
+//          - Fix cells application
+//          - Correctly remove snake id from player alive list
+//          - Snake weren't checking collisions with their own body
 // v3 - Add an opponent move choice before (The best base don heuristic)
 // v4 - Beam search : Strategy explained in README.md
 
@@ -573,7 +577,8 @@ MoveSet merge_movesets(MoveSet &moveset1, MoveSet &moveset2)
         set_moveset_move(merged_moveset, get_moveset_move(moveset1, i), i);
 
     // Add moves from moveset2
-    for (int i = 0; i < moveset2_move_count; i++)    {
+    for (int i = 0; i < moveset2_move_count; i++)
+    {
         set_moveset_move(merged_moveset, get_moveset_move(moveset2, i), moveset1_move_count + i);
     }
 
@@ -644,9 +649,6 @@ void handle_snake_collisions(State &colliding_state, State &resolved_state)
 
         for (int snake2_index = 0; snake2_index < get_alive_snake_count(colliding_state); snake2_index++)
         {
-            if (snake_index == snake2_index)
-                continue; // Don't check collision with itself
-
             // Iter over all other alive snakes
             int snake2_id = get_alive_snake_id(colliding_state, snake2_index);
             Snake &snake2 = get_snake(colliding_state, snake2_id);
@@ -654,11 +656,14 @@ void handle_snake_collisions(State &colliding_state, State &resolved_state)
             // Check if snake head is colliding with snake2 body
             for (int body_idx = 0; body_idx < get_snake_body_length(snake2); body_idx++)
             {
+                if (snake_index == snake2_index && body_idx == 0)
+                    continue; // Don't check collision with its own head
+
                 Pos snake2_body_pos = get_snake_body_pos(snake2, body_idx);
                 if (snake_head_pos == snake2_body_pos)
                 {
                     // fprintf(stderr, "Snake %d is colliding with snake %d\n", snake_id, snake2_id);
-                    Snake& future_snake = get_snake(resolved_state, snake_id);
+                    Snake &future_snake = get_snake(resolved_state, snake_id);
 
                     if (get_snake_body_length(future_snake) - 1 < 3)
                     {
@@ -793,7 +798,7 @@ void apply_moveset(State &previous_state, State &state, MoveSet &moveset)
     // To not corrupt data we need to keep the collisions intact in colliding_state, and apply the collisions in another state
     State colliding_state;
     memcpy(&colliding_state, &state, sizeof(State));
-    
+
     // Reset snake positions if we find a collision & Find dying snakes
     handle_snake_collisions(colliding_state, state);
 
@@ -935,14 +940,11 @@ MoveSet choose_player_move_set(State &state, int player_id, MoveSet &previous_pl
             print_moveset(turn_moveset);
             fprintf(stderr, "\n");
 
-            // print_map(next_state, "New best state :\n");
-
             best_evaluation = evaluation;
             best_moveset = movesets[i];
         }
     }
 
-    fprintf(stderr, "Best moveset evaluation: %f\n", best_evaluation);
     return best_moveset;
 }
 
@@ -1102,6 +1104,8 @@ int main()
         set_moveset_move_count(turn_beginning_movesets, 0);
 
         MoveSet best_opponent_moveset = choose_player_move_set(state, map_properties.opp_id, turn_beginning_movesets);
+        print_moveset(best_opponent_moveset);
+
         MoveSet best_moveset = choose_player_move_set(state, map_properties.my_id, best_opponent_moveset);
 
         print_marks(state, best_moveset);
