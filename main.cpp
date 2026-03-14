@@ -176,23 +176,6 @@ void print_moveset(MoveSet moveset)
     fprintf(stderr, "\n");
 }
 
-/* --- TOOL FUNCTIONS --- */
-
-int get_opponent_id(const int player_id) { return 1 - player_id; }
-
-bool is_north_cell_out_of_bounds(const Pos pos) { return get_y(pos) == 0; }
-bool is_west_cell_out_of_bounds(const Pos pos) { return get_x(pos) == 0; }
-bool is_east_cell_out_of_bounds(const Pos pos) { return get_x(pos) == MAX_WIDTH - 1; }
-bool is_south_cell_out_of_bounds(const Pos pos)
-{
-    return get_y(pos) == MAX_HEIGHT - 1;
-}
-
-Pos get_north_pos(const Pos pos) { return pos + NORTH_POS_OFFSET; }
-Pos get_west_pos(const Pos pos) { return pos + WEST_POS_OFFSET; }
-Pos get_east_pos(const Pos pos) { return pos + EAST_POS_OFFSET; }
-Pos get_south_pos(const Pos pos) { return pos + SOUTH_POS_OFFSET; }
-
 /* --- STATE --- */
 
 constexpr int CELL_EMPTY = 8;
@@ -201,6 +184,8 @@ constexpr int CELL_ENERGY = 10;
 
 struct State
 {
+    int turn;
+    bool game_ended;
     int game_points;           // Points difference between my id and opponent id
     int cells[MAX_CELL_COUNT]; // 0-7: snake_id, 8: CELL_EMPTY, 9: CELL_PLATFORM, 10: CELL_ENERGY
 
@@ -221,6 +206,8 @@ struct State
     MoveSet first_depth_moveset;
 };
 
+int get_turn(State &state) { return state.turn; }
+bool is_game_ended(State &state) { return state.game_ended; }
 int get_game_points(State &state) { return state.game_points; }
 int get_cell(State &state, Pos pos) { return state.cells[pos]; }
 Snake &get_snake(State &state, int snake_id) { return state.snakes[snake_id]; }
@@ -231,10 +218,29 @@ int get_alive_snake_id(State &state, int index) { return state.alive_snake_ids[i
 float get_heuristic(State &state) { return state.heuristic; }
 MoveSet &get_first_depth_moveset(State &state) { return state.first_depth_moveset; }
 
+void set_turn(State &state, int turn) { state.turn = turn; }
+void set_game_ended(State &state) { state.game_ended = true; }
 void set_cell(State &state, Pos pos, int value) { state.cells[pos] = value; }
 void set_energy(State &state, int index, Pos pos) { state.energies[index] = pos; }
 void set_heuristic(State &state, float heuristic) { state.heuristic = heuristic; }
 void set_first_depth_moveset(State &state, MoveSet &moveset) { state.first_depth_moveset = moveset; }
+
+void initialize_cells(State &state)
+{
+    for (int i = 0; i < MAX_CELL_COUNT; i++)
+    {
+        state.cells[i] = CELL_EMPTY;
+    }
+}
+void initialize_snake_data(
+    State &state,
+    int snake_id,
+    int player_id)
+{
+    Snake &snake = get_snake(state, snake_id);
+    initialize_snake_data(
+        snake, snake_id, player_id);
+}
 
 void reset_alive_snake_count(State &state)
 {
@@ -273,26 +279,26 @@ void remove_snake_from_alive_snake_ids(State &state, int snake_id, int player_id
     }
 }
 
-// void reset_snake_bodies(State &state)
-// {
-//     state.snake_bodies_count = 0;
-// }
-// void add_snake_body(State &state, Snake &snake)
-// {
-//     int snake_body_length = get_snake_body_length(snake);
-
-//     memcpy(&state.snake_bodies[state.snake_bodies_count], &snake.body_pos, sizeof(Pos) * snake_body_length);
-//     state.snake_bodies_count += snake_body_length;
-// }
-
 void update_game_points(State &state)
 {
-    // Positive game points is better for my player
-    int my_total_length = 0;
-    int opp_total_length = 0;
+    int my_snake_count = get_player_alive_snake_count(state, map_properties.my_id);
+    if (my_snake_count == 0)
+    {
+        set_game_ended(state);
+        state.game_points = -1000;
+        return;
+    }
+
+    int opp_snake_count = get_player_alive_snake_count(state, map_properties.opp_id);
+    if (opp_snake_count == 0)
+    {
+        set_game_ended(state);
+        state.game_points = 1000;
+        return;
+    }
 
     // Sum lengths of alive snakes for my player
-    int my_snake_count = get_player_alive_snake_count(state, map_properties.my_id);
+    int my_total_length = 0;
     for (int i = 0; i < my_snake_count; i++)
     {
         int snake_id = get_player_alive_snake_id(state, map_properties.my_id, i);
@@ -301,7 +307,7 @@ void update_game_points(State &state)
     }
 
     // Sum lengths of alive snakes for opponent
-    int opp_snake_count = get_player_alive_snake_count(state, map_properties.opp_id);
+    int opp_total_length = 0;
     for (int i = 0; i < opp_snake_count; i++)
     {
         int snake_id = get_player_alive_snake_id(state, map_properties.opp_id, i);
@@ -309,26 +315,26 @@ void update_game_points(State &state)
         opp_total_length += get_snake_body_length(snake);
     }
 
-    // Calculate difference
+    // Calculate difference - Positive game points is better for my player
     state.game_points = my_total_length - opp_total_length;
 }
 
-void initialize_cells(State &state)
+/* --- TOOL FUNCTIONS --- */
+
+int get_opponent_id(const int player_id) { return 1 - player_id; }
+
+bool is_north_cell_out_of_bounds(const Pos pos) { return get_y(pos) == 0; }
+bool is_west_cell_out_of_bounds(const Pos pos) { return get_x(pos) == 0; }
+bool is_east_cell_out_of_bounds(const Pos pos) { return get_x(pos) == MAX_WIDTH - 1; }
+bool is_south_cell_out_of_bounds(const Pos pos)
 {
-    for (int i = 0; i < MAX_CELL_COUNT; i++)
-    {
-        state.cells[i] = CELL_EMPTY;
-    }
+    return get_y(pos) == MAX_HEIGHT - 1;
 }
-void initialize_snake_data(
-    State &state,
-    int snake_id,
-    int player_id)
-{
-    Snake &snake = get_snake(state, snake_id);
-    initialize_snake_data(
-        snake, snake_id, player_id);
-}
+
+Pos get_north_pos(const Pos pos) { return pos + NORTH_POS_OFFSET; }
+Pos get_west_pos(const Pos pos) { return pos + WEST_POS_OFFSET; }
+Pos get_east_pos(const Pos pos) { return pos + EAST_POS_OFFSET; }
+Pos get_south_pos(const Pos pos) { return pos + SOUTH_POS_OFFSET; }
 
 int find_closest_energy_cell(State &state, Pos start_pos, Pos &closest_energy_cell_pos);
 void print_cells(State &state, string title = "")
@@ -790,6 +796,11 @@ void apply_gravity(State &state)
 
 void apply_moveset(State &previous_state, State &state, MoveSet &moveset)
 {
+    int previous_turn = get_turn(state);
+    set_turn(state, previous_turn + 1);
+    if (previous_turn == 200)
+        set_game_ended(state);
+
     // fprintf(stderr, "Applying moveset ...\n");
     apply_all_moves(state, moveset);
 
@@ -974,6 +985,34 @@ bool has_exceeded_time_limit(auto &start_chrono, int maximum_microseconds)
     return chrono::duration_cast<chrono::microseconds>(current_chrono - start_chrono).count() >= maximum_microseconds;
 }
 
+void consider_state_to_be_candidate(State &state, MoveSet &last_moveset, std::vector<State> &beam_search_candidates, int beam_width)
+{
+    // Save the new promising state if it's better than the current "worst best score"
+    bool less_state_than_beam_width = (int)beam_search_candidates.size() < beam_width;
+    if (less_state_than_beam_width || get_heuristic(state) > get_heuristic(beam_search_candidates.back()))
+    {
+        // The candidate moveset for the current game turn choice
+        if (beam_search_depth == 0)
+            set_first_depth_moveset(state, last_moveset);
+
+        // Find the first element with a score less than the current one (in descending
+        // order)
+        auto it = std::lower_bound(
+            beam_search_candidates.begin(), beam_search_candidates.end(), get_heuristic(state),
+            [](State &a, float s)
+            { return get_heuristic(a) > s; });
+
+        // Insert the new state before that element, to preserve the descending order
+        beam_search_candidates.insert(it, state);
+
+        // If we have more than beam_width states, remove the last one
+        if (!less_state_than_beam_width)
+            beam_search_candidates.pop_back();
+
+        // fprintf(stderr, "New candidate added with heuristic %f (> %f) - %d candidates among %d depth children visited\n", heuristic, get_heuristic(beam_search_candidates.back()), (int)beam_search_candidates.size(), depth_children_count);
+    }
+}
+
 MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam_width, int maximum_microseconds)
 {
     auto beam_start_chrono = chrono::high_resolution_clock::now();
@@ -986,7 +1025,6 @@ MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam
     beam_search_states.reserve(beam_width);
     beam_search_states.emplace_back(initial_state);
 
-    auto current_chrono = chrono::high_resolution_clock::now();
     while (!has_exceeded_time_limit(beam_start_chrono, maximum_microseconds) && beam_search_depth < depth_max)
     {
         fprintf(stderr, "Start beam search depth %d (%d ym remaining\n", beam_search_depth, maximum_microseconds - chrono::duration_cast<chrono::microseconds>(chrono::high_resolution_clock::now() - beam_start_chrono).count());
@@ -997,6 +1035,13 @@ MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam
 
         for (State &state : beam_search_states)
         {
+            // Skip ended states, but consider keeping it in candidates state
+            if (is_game_ended(state))
+            {
+                consider_state_to_be_candidate(state, get_first_depth_moveset(state), beam_search_candidates, beam_width);
+                continue;
+            }
+
             MoveSet turn_beginning_moveset = {};
             set_moveset_move_count(turn_beginning_moveset, 0);
             MoveSet opponent_moveset = choose_player_moveset(state, get_opponent_id(player_id), turn_beginning_moveset);
@@ -1017,30 +1062,7 @@ MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam
                 float heuristic = evaluate_state(next_state, player_id);
                 set_heuristic(next_state, heuristic);
 
-                // Save the new promising state if it's better than the current "worst best score"
-                bool less_state_than_beam_width = (int)beam_search_candidates.size() < beam_width;
-                if (less_state_than_beam_width || heuristic > get_heuristic(beam_search_candidates.back()))
-                {
-                    // The candidate moveset for the current game turn choice
-                    if (beam_search_depth == 0)
-                        set_first_depth_moveset(next_state, ally_movesets[i]);
-
-                    // Find the first element with a score less than the current one (in descending
-                    // order)
-                    auto it = std::lower_bound(
-                        beam_search_candidates.begin(), beam_search_candidates.end(), heuristic,
-                        [](State &a, float s)
-                        { return get_heuristic(a) > s; });
-
-                    // Insert the new state before that element, to preserve the descending order
-                    beam_search_candidates.insert(it, next_state);
-
-                    // If we have more than beam_width states, remove the last one
-                    if (!less_state_than_beam_width)
-                        beam_search_candidates.pop_back();
-
-                    // fprintf(stderr, "New candidate added with heuristic %f (> %f) - %d candidates among %d depth children visited\n", heuristic, get_heuristic(beam_search_candidates.back()), (int)beam_search_candidates.size(), depth_children_count);
-                }
+                consider_state_to_be_candidate(next_state, ally_movesets[i], beam_search_candidates, beam_width);
 
                 visited_states_count++;
 
@@ -1049,6 +1071,10 @@ MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam
                     break;
             }
         }
+
+        // If no candidates were found at this depth, stop expanding
+        if (beam_search_candidates.empty())
+            break;
 
         // Move vector data from beam_next_states to beam_current_states (Quicker than copying)
         beam_search_states = std::move(beam_search_candidates);
@@ -1059,7 +1085,11 @@ MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam
     fprintf(stderr, "Visited %d states\n", visited_states_count);
     fprintf(stderr, "Max depth reached: %d\n", beam_search_depth);
 
-    // First State is the best one because beam_search_states is already sorted by descending score
+    if (beam_search_states.empty())
+    {
+        MoveSet useless_moveset = {};
+        return choose_player_moveset(initial_state, player_id, useless_moveset);
+    }
     return get_first_depth_moveset(beam_search_states[0]);
 }
 
@@ -1190,11 +1220,13 @@ int main()
 
     // Save initial state for resetting cells each turn
     State state;
+    int turn = 0;
     while (true)
     {
         // Reset state to initial state before parsing fresh dynamic data
         memcpy(&state, &initial_state, sizeof(state));
         parse_turn_inputs(state);
+        set_turn(state, turn);
 
         auto start_turn_chrono = chrono::high_resolution_clock::now();
 
@@ -1240,6 +1272,7 @@ int main()
         auto end_turn_chrono = chrono::high_resolution_clock::now();
         int elapsed_time = chrono::duration_cast<chrono::microseconds>(end_turn_chrono - start_turn_chrono).count();
         fprintf(stderr, "Time elapsed after response: %d ys\n", elapsed_time);
+        turn++;
     }
 
     return 0;
