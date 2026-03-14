@@ -42,3 +42,9 @@
 
 # AI
 .serena
+
+# Valgrind
+callgrind*
+game*
+
+bin

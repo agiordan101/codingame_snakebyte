@@ -255,7 +255,6 @@ void add_player_alive_snake_id(State &state, int player_id, int snake_id)
 }
 void remove_snake_from_alive_snake_ids(State &state, int snake_id, int player_id)
 {
-    int snake_index = -1;
     for (int i = 0; i < state.alive_snake_count; i++)
     {
         if (state.alive_snake_ids[i] == snake_id)
@@ -431,7 +430,7 @@ bool is_cell_solid(int cell, int snake_id)
     return cell != snake_id && cell != CELL_EMPTY;
 }
 
-int generate_snake_moves(State &state, Snake &snake, Pos moves[3])
+int generate_snake_moves(Snake &snake, Pos moves[3])
 {
     Pos head_pos = get_snake_head_pos(snake);
 
@@ -451,31 +450,11 @@ int generate_snake_moves(State &state, Snake &snake, Pos moves[3])
     int move_count = 0;
     for (int i = 0; i < 4; i++)
     {
-        int neighbor = get_cell(state, neighbors[i]);
-
         // New valid cell if : In map & Not it neck
         if (!neighbor_out_of_bounds[i] && neighbors[i] != get_snake_body_pos(snake, 1))
         {
             moves[move_count++] = neighbors[i];
         }
-    }
-
-    if (move_count == 0)
-    {
-        fprintf(stderr, "Snake head pos: %d %d\n", get_map_x(head_pos), get_map_y(head_pos));
-        for (int i = 0; i < 4; i++)
-        {
-            int neighbor = get_cell(state, neighbors[i]);
-        }
-
-        for (int body_idx = 0; body_idx < get_snake_body_length(snake); body_idx++)
-        {
-            Pos body_pos = snake.body_pos[body_idx];
-            fprintf(stderr, "Body %d: %d %d\n", body_idx, get_map_x(body_pos), get_map_y(body_pos));
-        }
-
-        // TODO: If no move generated, create the default one: Continue forward
-        print_map(state, "No move generated for snake");
     }
 
     return move_count;
@@ -496,7 +475,7 @@ int generate_player_movesets(State &state, int player_id, MoveSet movesets[])
         Snake &snake = get_snake(state, snake_id);
 
         snake_ids[i] = snake_id;
-        snake_move_counts[i] = generate_snake_moves(state, snake, snake_moves[i]);
+        snake_move_counts[i] = generate_snake_moves(snake, snake_moves[i]);
     }
 
     // The idea is to generate all possible combinations of moves for each snake :
@@ -1062,7 +1041,7 @@ MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam
     while (!has_exceeded_time_limit(beam_start_chrono, maximum_microseconds) && beam_search_depth < depth_max)
     {
         beam_search_depth++;
-        fprintf(stderr, "Start beam search depth %d (%d ym remaining\n", beam_search_depth, maximum_microseconds - chrono::duration_cast<chrono::microseconds>(chrono::high_resolution_clock::now() - beam_start_chrono).count());
+        fprintf(stderr, "Start beam search depth %d (%ld ym remaining\n", beam_search_depth, maximum_microseconds - chrono::duration_cast<chrono::microseconds>(chrono::high_resolution_clock::now() - beam_start_chrono).count());
         int depth_children_count = 0;
 
         beam_search_candidates.clear();
@@ -1271,11 +1250,17 @@ int main()
         // print_map(state, "Turn beginning");
         // print_map_bfs_distances(state);
 
-        MoveSet best_moveset = beam_search(state, map_properties.my_id, 100, 10, 49500);
+        MoveSet best_moveset = beam_search(state, map_properties.my_id, 100, 30, 48000);
         // print_moveset(best_moveset);
 
         fprintf(stderr, "Visited %d states\n", visited_states_count);
         fprintf(stderr, "Max depth reached: %d\n", beam_search_depth);
+
+        if (get_moveset_move_count(best_moveset) == 0)
+        {
+            fprintf(stderr, "No best moveset found this turn !!!!!\n");
+            exit(0);
+        }
 
         print_marks(state, best_moveset);
 
