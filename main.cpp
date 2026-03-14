@@ -1030,6 +1030,7 @@ MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam
 
     while (!has_exceeded_time_limit(beam_start_chrono, maximum_microseconds) && beam_search_depth < depth_max)
     {
+        beam_search_depth++;
         fprintf(stderr, "Start beam search depth %d (%d ym remaining\n", beam_search_depth, maximum_microseconds - chrono::duration_cast<chrono::microseconds>(chrono::high_resolution_clock::now() - beam_start_chrono).count());
         int depth_children_count = 0;
 
@@ -1071,7 +1072,13 @@ MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam
 
                 // Useless ?
                 if (has_exceeded_time_limit(beam_start_chrono, maximum_microseconds))
-                    break;
+                {
+                    // Return the last depth best state or the currently best candidate of actual depth
+                    if (get_heuristic(beam_search_states[0]) > get_heuristic(beam_search_candidates[0]))
+                        return choose_player_moveset(initial_state, player_id, get_first_depth_moveset(beam_search_states[0]));
+                    else
+                        return choose_player_moveset(initial_state, player_id, get_first_depth_moveset(beam_search_candidates[0]));
+                }
             }
         }
 
@@ -1081,12 +1088,7 @@ MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam
 
         // Move vector data from beam_next_states to beam_current_states (Quicker than copying)
         beam_search_states = std::move(beam_search_candidates);
-
-        beam_search_depth++;
     }
-
-    fprintf(stderr, "Visited %d states\n", visited_states_count);
-    fprintf(stderr, "Max depth reached: %d\n", beam_search_depth);
 
     if (beam_search_states.empty())
     {
@@ -1238,8 +1240,11 @@ int main()
         // print_map(state, "Turn beginning");
         // print_map_bfs_distances(state);
 
-        MoveSet best_moveset = beam_search(state, map_properties.my_id, 100, 20, 49000);
+        MoveSet best_moveset = beam_search(state, map_properties.my_id, 100, 10, 49500);
         // print_moveset(best_moveset);
+
+        fprintf(stderr, "Visited %d states\n", visited_states_count);
+        fprintf(stderr, "Max depth reached: %d\n", beam_search_depth);
 
         print_marks(state, best_moveset);
 

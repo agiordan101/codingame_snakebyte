@@ -14,6 +14,9 @@ Winter Challenge 2026
   renvoyer une liste des snake qui collide dans handle_snake_collisions (donc avoir 1 seul state en param)
 - apply_moveset: Plutot que d'avoir un previous state, on pourrait juste remove_snake_in_cells_from_their_old_positions au tout début de la fonction ?
 . Ensuite remove head et kill les snake directement dans la même fonction 
+- Tester d'autres heuristic :
+    - Manhattan à la place de BFS
+    - Générer une map de BFS au premier tour !
 
 
 ## Strategies
