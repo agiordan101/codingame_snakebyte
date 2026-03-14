@@ -44,7 +44,7 @@ using Pos = int; // 1 dimension coordinate in map (y * width + x)
 constexpr int MAX_MAP_WIDTH = 45;
 constexpr int MAX_MAP_HEIGHT = 30;
 
-constexpr int MAP_PADDING = 3;
+constexpr int MAP_PADDING = 10;
 constexpr int MAX_WIDTH = MAX_MAP_WIDTH + 2 * MAP_PADDING;
 constexpr int MAX_HEIGHT = MAX_MAP_HEIGHT + 2 * MAP_PADDING;
 constexpr int MAX_CELL_COUNT = MAX_WIDTH * MAX_HEIGHT;
@@ -732,6 +732,16 @@ void set_snake_in_cells(State &state)
     }
 }
 
+void kill_snake_immediately(State &state, Snake &snake, int snake_body_length)
+{
+    // If not, remove snake from state
+    for (int i = 0; i < snake_body_length; i++)
+        set_cell(state, get_snake_body_pos(snake, i), CELL_EMPTY);
+
+    set_snake_dying(snake);
+    kill_dying_snakes(state);
+}
+
 bool apply_snake_gravity(State &state, Snake &snake)
 {
     int snake_id = get_snake_id(snake);
@@ -742,10 +752,20 @@ bool apply_snake_gravity(State &state, Snake &snake)
     int y = 0;
     while (y++ < MAX_HEIGHT)
     {
+        int min_y = MAX_HEIGHT;
+
         // Verify if snake has one solid cell under it
         for (int i = 0; i < snake_body_length; i++)
         {
             Pos pos = get_snake_body_pos(snake, i);
+
+            // Consider it's falling under the map
+            if (is_south_cell_out_of_bounds(pos))
+            {
+                kill_snake_immediately(state, snake, snake_body_length);
+                return true;
+            }
+
             Pos pos_below = get_south_pos(pos);
             int cell_below = get_cell(state, pos_below);
 
@@ -753,15 +773,21 @@ bool apply_snake_gravity(State &state, Snake &snake)
             if (is_cell_solid(cell_below, snake_id))
                 return gravity_applied;
 
+            min_y = min(min_y, get_y(pos_below));
             new_snake_positions[i] = pos_below;
         }
-
-        // TODO: Kill the snake if it fall under the map
-        gravity_applied = true;
 
         // If not, remove snake from state
         for (int i = 0; i < snake_body_length; i++)
             set_cell(state, get_snake_body_pos(snake, i), CELL_EMPTY);
+
+        // If its maximum position is the map height, it's falling under the map
+        // Do not add the snake in the cells
+        if (min_y >= map_properties.height + MAP_PADDING)
+        {
+            kill_snake_immediately(state, snake, snake_body_length);
+            return true;
+        }
 
         // And set it one cell below
         for (int i = 0; i < snake_body_length; i++)
@@ -769,6 +795,8 @@ bool apply_snake_gravity(State &state, Snake &snake)
             set_cell(state, new_snake_positions[i], snake_id);
             set_snake_body_pos(snake, i, new_snake_positions[i]);
         }
+
+        gravity_applied = true;
     }
 
     return gravity_applied;
