@@ -3,20 +3,21 @@ Winter Challenge 2026
 
 # TODO
 
-- TODO: Kill the snake if it fall under the map
+- Crash quand on arrive en fin de game: Quand ya plus dernergy ?
+- Se jette sur un snake ou il y avait une energy ...
 - A faire après le beam search, pour correctement évaluer l'amélioration du ratio temps/précision de l'heuristic : Faire un nouveau DFS qui prends en compte la gravité et son body :
     On prends l'état actuel
     On fait bouger que ce snake
     en v1: On considère une seule fois les cases où la tête est passée
     en v1: On shift les pos du body ?
+- Tester d'autres heuristic :
+    - Manhattan à la place de BFS
+    - Générer une map de BFS au premier tour !
 - Collisions :
   Plutot que d'avoir un state previous ou resolved et dying flag on ourrait :
   renvoyer une liste des snake qui collide dans handle_snake_collisions (donc avoir 1 seul state en param)
 - apply_moveset: Plutot que d'avoir un previous state, on pourrait juste remove_snake_in_cells_from_their_old_positions au tout début de la fonction ?
 . Ensuite remove head et kill les snake directement dans la même fonction 
-- Tester d'autres heuristic :
-    - Manhattan à la place de BFS
-    - Générer une map de BFS au premier tour !
 
 
 ## Strategies

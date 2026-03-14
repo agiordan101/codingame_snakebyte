@@ -951,11 +951,13 @@ float evaluate_state(State &state, int player_id)
             dist_sum += dist;
     }
 
+    float dist_score = dist_sum != 0 ? 1.0 / dist_sum : 0.0;
+
     if (player_id == map_properties.my_id)
-        return get_game_points(state) + 1.0 / dist_sum;
+        return get_game_points(state) + dist_score;
 
     // Game points is positive if it's good for my player, negative if it's good for opponent, so we invert it for opponent evaluation
-    return -get_game_points(state) + 1.0 / dist_sum;
+    return -get_game_points(state) + dist_score;
 }
 
 MoveSet choose_player_moveset(State &state, int player_id, MoveSet &previous_player_moveset)
@@ -1001,7 +1003,8 @@ void print_marks(State &state, MoveSet best_moveset)
         Pos closest;
         int dist = find_closest_energy_cell(state, get_snake_head_pos(snake), closest);
 
-        cout << "MARK " << get_map_x(closest) << " " << get_map_y(closest) << ";";
+        if (dist != -1)
+            cout << "MARK " << get_map_x(closest) << " " << get_map_y(closest) << ";";
     }
 }
 
