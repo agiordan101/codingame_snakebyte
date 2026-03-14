@@ -3,6 +3,7 @@ Winter Challenge 2026
 
 # TODO
 
+- TODO: Kill the snake if it fall under the map
 - A faire après le beam search, pour correctement évaluer l'amélioration du ratio temps/précision de l'heuristic : Faire un nouveau DFS qui prends en compte la gravité et son body :
     On prends l'état actuel
     On fait bouger que ce snake

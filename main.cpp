@@ -688,7 +688,9 @@ void handle_snake_collisions(State &colliding_state, State &resolved_state)
 
 void kill_dying_snakes(State &state)
 {
-    for (int i = 0; i < get_alive_snake_count(state); i++)
+    // Iterate backwards because we're removing snakes by shifting the array right to left
+    // Iterate forward would skip the snake after the one we removed
+    for (int i = get_alive_snake_count(state) - 1; i >= 0; i--)
     {
         int snake_id = get_alive_snake_id(state, i);
         Snake &snake = get_snake(state, snake_id);
@@ -755,7 +757,6 @@ bool apply_snake_gravity(State &state, Snake &snake)
         }
 
         // TODO: Kill the snake if it fall under the map
-
         gravity_applied = true;
 
         // If not, remove snake from state
@@ -769,6 +770,8 @@ bool apply_snake_gravity(State &state, Snake &snake)
             set_snake_body_pos(snake, i, new_snake_positions[i]);
         }
     }
+
+    return gravity_applied;
 }
 
 void apply_gravity(State &state)
@@ -1235,7 +1238,7 @@ int main()
         // print_map(state, "Turn beginning");
         // print_map_bfs_distances(state);
 
-        MoveSet best_moveset = beam_search(state, map_properties.my_id, 100, 81, 49000);
+        MoveSet best_moveset = beam_search(state, map_properties.my_id, 100, 20, 49000);
         // print_moveset(best_moveset);
 
         print_marks(state, best_moveset);
