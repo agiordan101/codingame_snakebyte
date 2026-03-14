@@ -1,4 +1,4 @@
-// Version 2.1.1
+// Version 4
 
 // Algorithms :
 // v1 - Each snakes go to closest Energy cell using BFS
@@ -6,14 +6,14 @@
 //  v1.2 - Always select a valid action, even if no energy cell is found
 //  v1.3 - Add padding around map so all simulations work outside the map (BFS, etc...)
 // v2 - Evaluate all possible move combinaisons at current depth, using physics simulation (gravity + collisions) and an improved fitness function (Score diff + sum (Snake/Energy distances))
-//  v2.1 - Find best move set for the opponent first, then for the player in consequence
-//   v2.1.1 - Apply turn moveset in each simulation
-//          - Fix collisions simulation
-//          - Fix cells application
-//          - Correctly remove snake id from player alive list
-//          - Snake weren't checking collisions with their own body
-// v3 - Add an opponent move choice before (The best base don heuristic)
+// v3 - Add an opponent move choice before with same algorithm
+//   v3.1 - Apply opponent moveset in each simulated moveset
+//        - Fix collisions simulation
+//        - Fix cells application
+//        - Correctly remove snake id from player alive list
+//        - Snake weren't checking collisions with their own body
 // v4 - Beam search : Strategy explained in README.md
+//   v4.1 - Generate opponent moveset by anticipating our next move
 
 #undef _GLIBCXX_DEBUG
 #pragma GCC optimize("Ofast,unroll-loops,omit-frame-pointer,inline")
@@ -33,6 +33,7 @@
 #include <map>
 #include <set>
 #include <unordered_set>
+#include <chrono>
 
 using namespace std;
 
@@ -76,6 +77,8 @@ int get_map_y(Pos pos) { return get_y(pos) - MAP_PADDING; }
 /* --- SNAKE --- */
 
 constexpr int MAX_SNAKE_SIZE = 50;
+constexpr int MAX_SNAKE_COUNT = 8;
+constexpr int MAX_PLAYER_SNAKE_COUNT = MAX_SNAKE_COUNT / 2;
 
 struct Snake
 {
@@ -136,14 +139,61 @@ void print_snake(Snake &snake)
     }
 }
 
-/* --- STATE --- */
+/* --- ACTION / MOVE --- */
 
-constexpr int MAX_SNAKE_COUNT = 8;
-constexpr int MAX_PLAYER_SNAKE_COUNT = MAX_SNAKE_COUNT / 2;
-constexpr int MIN_SNAKE_ID = 1;
+struct Move
+{
+    int snake_id;
+    Pos dst_pos;
+};
+
+int get_move_snake_id(Move &move) { return move.snake_id; }
+Pos get_move_dst_pos(Move &move) { return move.dst_pos; }
+
+void set_move_snake_id(Move &move, int id) { move.snake_id = id; }
+void set_move_dst_pos(Move &move, Pos pos) { move.dst_pos = pos; }
 
 constexpr int constexpr_pow(int base, int exp) { return exp == 0 ? 1 : base * constexpr_pow(base, exp - 1); }
-constexpr int MAX_ACTION_COUNT = constexpr_pow(3, MAX_SNAKE_COUNT);
+constexpr int MAX_PLAYER_MOVE_SETS = constexpr_pow(3, MAX_PLAYER_SNAKE_COUNT); // Max move combinaisons for one player
+
+struct MoveSet
+{
+    Move moves[MAX_SNAKE_COUNT];
+    int move_count;
+};
+
+Move &get_moveset_move(MoveSet &moveset, int i) { return moveset.moves[i]; }
+int get_moveset_move_count(MoveSet &moveset) { return moveset.move_count; }
+
+void set_moveset_move(MoveSet &moveset, Move &move, int i) { moveset.moves[i] = move; }
+void set_moveset_move_count(MoveSet &moveset, int count) { moveset.move_count = count; }
+
+void print_moveset(MoveSet moveset)
+{
+    fprintf(stderr, "MoveSet (move_count=%d) : ", moveset.move_count);
+    for (int i = 0; i < moveset.move_count; i++)
+        fprintf(stderr, "S=%d: %d %d | ", moveset.moves[i].snake_id, get_map_x(moveset.moves[i].dst_pos), get_map_y(moveset.moves[i].dst_pos));
+    fprintf(stderr, "\n");
+}
+
+/* --- TOOL FUNCTIONS --- */
+
+int get_opponent_id(const int player_id) { return 1 - player_id; }
+
+bool is_north_cell_out_of_bounds(const Pos pos) { return get_y(pos) == 0; }
+bool is_west_cell_out_of_bounds(const Pos pos) { return get_x(pos) == 0; }
+bool is_east_cell_out_of_bounds(const Pos pos) { return get_x(pos) == MAX_WIDTH - 1; }
+bool is_south_cell_out_of_bounds(const Pos pos)
+{
+    return get_y(pos) == MAX_HEIGHT - 1;
+}
+
+Pos get_north_pos(const Pos pos) { return pos + NORTH_POS_OFFSET; }
+Pos get_west_pos(const Pos pos) { return pos + WEST_POS_OFFSET; }
+Pos get_east_pos(const Pos pos) { return pos + EAST_POS_OFFSET; }
+Pos get_south_pos(const Pos pos) { return pos + SOUTH_POS_OFFSET; }
+
+/* --- STATE --- */
 
 constexpr int CELL_EMPTY = 8;
 constexpr int CELL_PLATFORM = 9;
@@ -162,18 +212,13 @@ struct State
     int alive_snake_count;
     int alive_snake_ids[MAX_SNAKE_COUNT];
 
+    // Currently used only to parse stdin
+    // May be useful later for more complex heuristics
     Pos energies[MAX_CELL_COUNT];
     int energy_count;
 
-    // Pos snake_bodies[MAX_CELL_COUNT];
-    // int snake_bodies_count;
-
-    // Action actions[MAX_ACTION_COUNT]; // All available actions for one turn
-    // int action_count;                 // Number of actions available
-
-    // Action selected_actions[MAX_SNAKE_COUNT];
-    // int selected_actions_count;
-    // int snake_having_played[MIN_SNAKE_ID + MAX_SNAKE_COUNT]; // 0: not played, 1: played
+    float heuristic;
+    MoveSet first_depth_moveset;
 };
 
 int get_game_points(State &state) { return state.game_points; }
@@ -183,9 +228,13 @@ int get_player_alive_snake_count(State &state, int player_id) { return state.pla
 int get_player_alive_snake_id(State &state, int player_id, int index) { return state.player_alive_snake_ids[player_id][index]; }
 int get_alive_snake_count(State &state) { return state.alive_snake_count; }
 int get_alive_snake_id(State &state, int index) { return state.alive_snake_ids[index]; }
+float get_heuristic(State &state) { return state.heuristic; }
+MoveSet &get_first_depth_moveset(State &state) { return state.first_depth_moveset; }
 
 void set_cell(State &state, Pos pos, int value) { state.cells[pos] = value; }
 void set_energy(State &state, int index, Pos pos) { state.energies[index] = pos; }
+void set_heuristic(State &state, float heuristic) { state.heuristic = heuristic; }
+void set_first_depth_moveset(State &state, MoveSet &moveset) { state.first_depth_moveset = moveset; }
 
 void reset_alive_snake_count(State &state)
 {
@@ -368,57 +417,6 @@ void print_map_bfs_distances(State &state)
         fprintf(stderr, "\n");
     }
 }
-
-/* --- ACTION / MOVE --- */
-
-struct Move
-{
-    int snake_id;
-    Pos dst_pos;
-};
-
-int get_move_snake_id(Move &move) { return move.snake_id; }
-Pos get_move_dst_pos(Move &move) { return move.dst_pos; }
-
-void set_move_snake_id(Move &move, int id) { move.snake_id = id; }
-void set_move_dst_pos(Move &move, Pos pos) { move.dst_pos = pos; }
-
-constexpr int MAX_PLAYER_MOVE_SETS = constexpr_pow(3, MAX_PLAYER_SNAKE_COUNT); // Max move combinaisons for one player
-
-struct MoveSet
-{
-    Move moves[MAX_SNAKE_COUNT];
-    int move_count;
-};
-
-Move &get_moveset_move(MoveSet &moveset, int i) { return moveset.moves[i]; }
-int get_moveset_move_count(MoveSet &moveset) { return moveset.move_count; }
-
-void set_moveset_move(MoveSet &moveset, Move &move, int i) { moveset.moves[i] = move; }
-void set_moveset_move_count(MoveSet &moveset, int count) { moveset.move_count = count; }
-
-void print_moveset(MoveSet moveset)
-{
-    for (int i = 0; i < moveset.move_count; i++)
-        fprintf(stderr, "S=%d: %d %d | ", moveset.moves[i].snake_id, get_map_x(moveset.moves[i].dst_pos), get_map_y(moveset.moves[i].dst_pos));
-}
-
-/* --- TOOL FUNCTIONS --- */
-
-int get_opponent_id(const int player_id) { return 1 - player_id; }
-
-bool is_north_cell_out_of_bounds(const Pos pos) { return get_y(pos) == 0; }
-bool is_west_cell_out_of_bounds(const Pos pos) { return get_x(pos) == 0; }
-bool is_east_cell_out_of_bounds(const Pos pos) { return get_x(pos) == MAX_WIDTH - 1; }
-bool is_south_cell_out_of_bounds(const Pos pos)
-{
-    return get_y(pos) == MAX_HEIGHT - 1;
-}
-
-Pos get_north_pos(const Pos pos) { return pos + NORTH_POS_OFFSET; }
-Pos get_west_pos(const Pos pos) { return pos + WEST_POS_OFFSET; }
-Pos get_east_pos(const Pos pos) { return pos + EAST_POS_OFFSET; }
-Pos get_south_pos(const Pos pos) { return pos + SOUTH_POS_OFFSET; }
 
 /* --- GAME PHYSICS - GENERATION --- */
 
@@ -808,13 +806,15 @@ void apply_moveset(State &previous_state, State &state, MoveSet &moveset)
     set_snake_in_cells(state);
 
     apply_gravity(state);
-    
     update_game_points(state);
 
-    // if (moveset.moves[0].dst_pos == get_pos_from_map_coord(9, 6))
+    // if (moveset.moves[4].dst_pos == get_pos_from_map_coord(10, 15) && moveset.moves[5].dst_pos == get_pos_from_map_coord(5, 10) && moveset.moves[6].dst_pos == get_pos_from_map_coord(32, 20) && moveset.moves[7].dst_pos == get_pos_from_map_coord(42, 20))
     // {
-    //     fprintf(stderr, "Game points != 0 after apply_gravity: %d\n", state.game_points);
-    //     print_map(state, "State after apply_gravity:");
+    //     update_game_points(state);
+
+    //     print_snake(get_snake(state, 1));
+    //     fprintf(stderr, "Game point after apply_all_moves: %d\n", state.game_points);
+    //     print_map(state, "State after apply_all_moves:");
     // }
 }
 
@@ -916,10 +916,10 @@ float evaluate_state(State &state, int player_id)
     return -get_game_points(state) + 1.0 / dist_sum;
 }
 
-MoveSet choose_player_move_set(State &state, int player_id, MoveSet &previous_player_moveset)
+MoveSet choose_player_moveset(State &state, int player_id, MoveSet &previous_player_moveset)
 {
     State next_state;
-    fprintf(stderr, "Choosing move set for player %d ...\n", player_id);
+    // fprintf(stderr, "Choosing move set for player %d ...\n", player_id);
 
     MoveSet movesets[MAX_PLAYER_MOVE_SETS];
     int moveset_count = generate_player_movesets(state, player_id, movesets);
@@ -936,9 +936,9 @@ MoveSet choose_player_move_set(State &state, int player_id, MoveSet &previous_pl
         float evaluation = evaluate_state(next_state, player_id);
         if (best_evaluation < evaluation)
         {
-            fprintf(stderr, "New best moveset found for player %d with evaluation %f: ", player_id, evaluation);
-            print_moveset(turn_moveset);
-            fprintf(stderr, "\n");
+            // fprintf(stderr, "New best moveset found for player %d with evaluation %f: ", player_id, evaluation);
+            // print_moveset(turn_moveset);
+            // fprintf(stderr, "\n");
 
             best_evaluation = evaluation;
             best_moveset = movesets[i];
@@ -961,6 +961,106 @@ void print_marks(State &state, MoveSet best_moveset)
 
         cout << "MARK " << get_map_x(closest) << " " << get_map_y(closest) << ";";
     }
+}
+
+/* --- ALGORITHM - BEAM SEARCH --- */
+
+int beam_search_depth = 0;
+int visited_states_count = 0;
+
+bool has_exceeded_time_limit(auto &start_chrono, int maximum_microseconds)
+{
+    auto current_chrono = chrono::high_resolution_clock::now();
+    return chrono::duration_cast<chrono::microseconds>(current_chrono - start_chrono).count() >= maximum_microseconds;
+}
+
+MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam_width, int maximum_microseconds)
+{
+    auto beam_start_chrono = chrono::high_resolution_clock::now();
+    visited_states_count = 0;
+    beam_search_depth = 0;
+
+    std::vector<State> beam_search_states;
+    std::vector<State> beam_search_candidates;
+
+    beam_search_states.reserve(beam_width);
+    beam_search_states.emplace_back(initial_state);
+
+    auto current_chrono = chrono::high_resolution_clock::now();
+    while (!has_exceeded_time_limit(beam_start_chrono, maximum_microseconds) && beam_search_depth < depth_max)
+    {
+        fprintf(stderr, "Start beam search depth %d (%d ym remaining\n", beam_search_depth, maximum_microseconds - chrono::duration_cast<chrono::microseconds>(chrono::high_resolution_clock::now() - beam_start_chrono).count());
+        int depth_children_count = 0;
+
+        beam_search_candidates.clear();
+        beam_search_candidates.reserve(beam_width);
+
+        for (State &state : beam_search_states)
+        {
+            MoveSet turn_beginning_moveset = {};
+            set_moveset_move_count(turn_beginning_moveset, 0);
+            MoveSet opponent_moveset = choose_player_moveset(state, get_opponent_id(player_id), turn_beginning_moveset);
+
+            State next_state;
+
+            MoveSet ally_movesets[MAX_PLAYER_MOVE_SETS];
+            int ally_moveset_count = generate_player_movesets(state, player_id, ally_movesets);
+
+            for (int i = 0; i < ally_moveset_count; i++)
+            {
+                depth_children_count++;
+                memcpy(&next_state, &state, sizeof(State));
+
+                MoveSet turn_moveset = merge_movesets(opponent_moveset, ally_movesets[i]);
+                apply_moveset(state, next_state, turn_moveset);
+
+                float heuristic = evaluate_state(next_state, player_id);
+                set_heuristic(next_state, heuristic);
+
+                // Save the new promising state if it's better than the current "worst best score"
+                bool less_state_than_beam_width = (int)beam_search_candidates.size() < beam_width;
+                if (less_state_than_beam_width || heuristic > get_heuristic(beam_search_candidates.back()))
+                {
+                    // The candidate moveset for the current game turn choice
+                    if (beam_search_depth == 0)
+                        set_first_depth_moveset(next_state, ally_movesets[i]);
+
+                    // Find the first element with a score less than the current one (in descending
+                    // order)
+                    auto it = std::lower_bound(
+                        beam_search_candidates.begin(), beam_search_candidates.end(), heuristic,
+                        [](State &a, float s)
+                        { return get_heuristic(a) > s; });
+
+                    // Insert the new state before that element, to preserve the descending order
+                    beam_search_candidates.insert(it, next_state);
+
+                    // If we have more than beam_width states, remove the last one
+                    if (!less_state_than_beam_width)
+                        beam_search_candidates.pop_back();
+
+                    // fprintf(stderr, "New candidate added with heuristic %f (> %f) - %d candidates among %d depth children visited\n", heuristic, get_heuristic(beam_search_candidates.back()), (int)beam_search_candidates.size(), depth_children_count);
+                }
+
+                visited_states_count++;
+
+                // Useless ?
+                if (has_exceeded_time_limit(beam_start_chrono, maximum_microseconds))
+                    break;
+            }
+        }
+
+        // Move vector data from beam_next_states to beam_current_states (Quicker than copying)
+        beam_search_states = std::move(beam_search_candidates);
+
+        beam_search_depth++;
+    }
+
+    fprintf(stderr, "Visited %d states\n", visited_states_count);
+    fprintf(stderr, "Max depth reached: %d\n", beam_search_depth);
+
+    // First State is the best one because beam_search_states is already sorted by descending score
+    return get_first_depth_moveset(beam_search_states[0]);
 }
 
 /* --- PARSING --- */
@@ -1095,18 +1195,16 @@ int main()
         // Reset state to initial state before parsing fresh dynamic data
         memcpy(&state, &initial_state, sizeof(state));
         parse_turn_inputs(state);
-        update_game_points(state);
+
+        auto start_turn_chrono = chrono::high_resolution_clock::now();
+
+        update_game_points(state); // useless ?
         // print_cells(state, "Turn beginning");
         // print_map(state, "Turn beginning");
         // print_map_bfs_distances(state);
 
-        MoveSet turn_beginning_movesets = {};
-        set_moveset_move_count(turn_beginning_movesets, 0);
-
-        MoveSet best_opponent_moveset = choose_player_move_set(state, map_properties.opp_id, turn_beginning_movesets);
-        print_moveset(best_opponent_moveset);
-
-        MoveSet best_moveset = choose_player_move_set(state, map_properties.my_id, best_opponent_moveset);
+        MoveSet best_moveset = beam_search(state, map_properties.my_id, 100, 81, 49000);
+        // print_moveset(best_moveset);
 
         print_marks(state, best_moveset);
 
@@ -1121,7 +1219,7 @@ int main()
 
             int dir_offset = dir - snake_head;
 
-            fprintf(stderr, "Chosen move for snake %d: %d %d\n", get_move_snake_id(move), get_map_x(get_move_dst_pos(move)), get_map_y(get_move_dst_pos(move)));
+            // fprintf(stderr, "Chosen move for snake %d: %d %d\n", get_move_snake_id(move), get_map_x(get_move_dst_pos(move)), get_map_y(get_move_dst_pos(move)));
 
             if (dir_offset == NORTH_POS_OFFSET)
                 cout << snake_id << " UP";
@@ -1137,6 +1235,11 @@ int main()
         }
 
         cout << endl;
+
+        // Print microseconds
+        auto end_turn_chrono = chrono::high_resolution_clock::now();
+        int elapsed_time = chrono::duration_cast<chrono::microseconds>(end_turn_chrono - start_turn_chrono).count();
+        fprintf(stderr, "Time elapsed after response: %d ys\n", elapsed_time);
     }
 
     return 0;

@@ -3,7 +3,6 @@ Winter Challenge 2026
 
 # TODO
 
-- Timout crash !
 - A faire après le beam search, pour correctement évaluer l'amélioration du ratio temps/précision de l'heuristic : Faire un nouveau DFS qui prends en compte la gravité et son body :
     On prends l'état actuel
     On fait bouger que ce snake
@@ -12,10 +11,9 @@ Winter Challenge 2026
 - Collisions :
   Plutot que d'avoir un state previous ou resolved et dying flag on ourrait :
   renvoyer une liste des snake qui collide dans handle_snake_collisions (donc avoir 1 seul state en param)
+- apply_moveset: Plutot que d'avoir un previous state, on pourrait juste remove_snake_in_cells_from_their_old_positions au tout début de la fonction ?
 . Ensuite remove head et kill les snake directement dans la même fonction 
 
-- Problème dans le game score après dying ?
-    Diff de score à 4 alors que il n'y a que 3.
 
 ## Strategies
 
@@ -51,48 +49,56 @@ Apply gravity :
 
 Their is at most 3^4=81 action combinaisons per player.
 
-Move -> A snake moving in one direction
-PlayerMoveSet -> A set of 'player snake count' moves
-TurnMoveSet -> A set of 'total snake count' moves representing a turn
-ActionSet -> A history of TurnMoveSet representing game turns
+Move -> A snake moving to a neighboor position
+MoveSet -> A list of Move
 
 - Iter on each depth while 49ms isn't reached :
     - Clear beam_search_candidates
-    - For each ActionSet in the beam_search_actionsets list (0 < n <= beam_width) :
-        - Reset state to turn beginning
-        - Apply the ActionSet
-        - Generate all opponent PlayerMoveSet
-        - For each opponent PlayerMoveSet :
-            - Reset state to the current evaluated ActionSet
-            - Apply the PlayerMoveSet
+    - For each beam_state in the beam_search_states list (0 < n <= beam_width) :
+        - Generate all combinaisons of opponent MoveSet from beam_state
+        - For each opponent MoveSet :
+            - Reset current_state to beam_state
+            - Apply the opponent MoveSet
             - Simulate collisions and gravity
             - Run heuristic
-        - Select the best opponent PlayerMoveSet
-            <!-- - By running a beam search with small width and depthMax=2/3 ? -->
-        - Generate all ally PlayerMoveSet
-        - For each ally PlayerMoveSet :
-            - Reset state to the current evaluated ActionSet
-            - Apply the opponent PlayerMoveSet
-            - Apply the ally PlayerMoveSet
+        - Select the best opponent MoveSet
+        - Generate all combinaisons of ally MoveSet from beam_state
+        - For each ally MoveSet :
+            - Reset current_state to beam_state
+            - Apply the opponent MoveSet
+            - Apply the ally MoveSet
             - Simulate collisions and gravity
-            - Run heuristic
-            - Create a TurnMoveSet with the two PlayerMoveSet
-            - Create a candidate ActionSet from the current ActionSet and TurnMoveSet, and add it to beam_search_candidates list
-    - Keep the best 'beam_width' ActionSet from beam_search_candidates, and move them in beam_search_actionsets
+            - Run and store heuristic in current_state
+            - (For the first turn only: Save MoveSet as first_depth_moveset in current_state)
+            - Add a copy of the final current_state in beam_search_candidates
+    - Sort all states in beam_search_candidates
+    - Move best 'beam_width' states from beam_search_candidates to beam_search_states
 
 ## History
 
-# v2.1
+# v3.1
 
-+ Find best move set for the opponent first, then for the player in consequence
++ Apply opponent moveset in each simulated moveset
++ Fix collisions simulation
++ Fix cells application
++ Correctly remove snake id from player alive list
++ Snake weren't checking collisions with their own body
+
+League: Silver (max)
+Begin at position : 155/1580
+Ending at position: 145/1600
+
+# v2.1 = v3 (lot of bugs)
+
+Find opponent moveset with same algorithm before considering mine
 
 League: Silver (max)
 Begin at position : 330/1450
-Ending at position: -/-
+Ending at position: 485/1563
 
 # v2
 
-Evaluate all possible move combinaisons at current depth, using physics simulation (gravity + collisions) and an improved fitness function (Score diff + sum (Snake/Energy distances))
+Evaluate all possible move combinaisons at current depth, using physics simulation (gravity + collisions) and an improved fitness function (Score diff + sum (Snake closest energy distance))
 
 League: Silver (max)
 Begin at position : 330/1450
