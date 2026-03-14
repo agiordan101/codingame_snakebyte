@@ -76,7 +76,7 @@ int get_map_y(Pos pos) { return get_y(pos) - MAP_PADDING; }
 
 /* --- SNAKE --- */
 
-constexpr int MAX_SNAKE_SIZE = 50;
+constexpr int MAX_SNAKE_SIZE = 100;
 constexpr int MAX_SNAKE_COUNT = 8;
 constexpr int MAX_PLAYER_SNAKE_COUNT = MAX_SNAKE_COUNT / 2;
 
@@ -255,23 +255,30 @@ void add_player_alive_snake_id(State &state, int player_id, int snake_id)
 }
 void remove_snake_from_alive_snake_ids(State &state, int snake_id, int player_id)
 {
-    for (int i = 0; i < state.alive_snake_count; i++)
+    for (int i = 0; i < get_alive_snake_count(state); i++)
     {
-        if (state.alive_snake_ids[i] == snake_id)
+        if (get_alive_snake_id(state, i) == snake_id)
         {
-            // Remove the snake id from alive_snake_ids by shifting the rest of the array
-            memmove(&state.alive_snake_ids[i], &state.alive_snake_ids[i + 1], sizeof(int) * (state.alive_snake_count - i - 1));
+            if (i + 1 < get_alive_snake_count(state))
+            {
+                // Remove the snake id from alive_snake_ids by shifting the rest of the array
+                memmove(&state.alive_snake_ids[i], &state.alive_snake_ids[i + 1], sizeof(int) * (get_alive_snake_count(state) - i - 1));
+            }
             state.alive_snake_count--;
+            break;
         }
     }
 
     // Remove the snake from the player's alive snake ids
-    for (int i = 0; i < state.player_alive_snake_count[player_id]; i++)
+    for (int i = 0; i < get_player_alive_snake_count(state, player_id); i++)
     {
-        if (state.player_alive_snake_ids[player_id][i] == snake_id)
+        if (get_player_alive_snake_id(state, player_id, i) == snake_id)
         {
-            // Remove the snake id from alive_snake_ids by shifting the rest of the array
-            memmove(&state.player_alive_snake_ids[player_id][i], &state.player_alive_snake_ids[player_id][i + 1], sizeof(int) * (state.player_alive_snake_count[player_id] - i - 1));
+            if (i + 1 < get_player_alive_snake_count(state, player_id))
+            {
+                // Remove the snake id from alive_snake_ids by shifting the rest of the array
+                memmove(&state.player_alive_snake_ids[player_id][i], &state.player_alive_snake_ids[player_id][i + 1], sizeof(int) * (get_player_alive_snake_count(state, player_id) - i - 1));
+            }
             state.player_alive_snake_count[player_id]--;
             return;
         }
@@ -284,7 +291,8 @@ void update_game_points(State &state)
     if (my_snake_count == 0)
     {
         set_game_ended(state);
-        state.game_points = -1000;
+        // Set a high negative score if we lost, weighted by the turn number to prioritize losing later than sooner
+        state.game_points = -100 * get_turn(state);
         return;
     }
 
@@ -292,7 +300,8 @@ void update_game_points(State &state)
     if (opp_snake_count == 0)
     {
         set_game_ended(state);
-        state.game_points = 1000;
+        // Set a high positive score if we win, weighted by the turn number to prioritize winning sooner than later
+        state.game_points = 100 * (201 - get_turn(state));
         return;
     }
 
@@ -316,6 +325,13 @@ void update_game_points(State &state)
 
     // Calculate difference - Positive game points is better for my player
     state.game_points = my_total_length - opp_total_length;
+
+    if (get_turn(state) == 200)
+    {
+        set_game_ended(state);
+        // Make the score difference more important at the end of the game, to prioritize winning more than heuristics objectives
+        state.game_points *= 100;
+    }
 }
 
 /* --- TOOL FUNCTIONS --- */
@@ -555,6 +571,8 @@ MoveSet merge_movesets(MoveSet &moveset1, MoveSet &moveset2)
     int moveset1_move_count = get_moveset_move_count(moveset1);
     int moveset2_move_count = get_moveset_move_count(moveset2);
 
+    // TODO: Use memcpy ?
+
     // Add moves from moveset1
     for (int i = 0; i < moveset1_move_count; i++)
         set_moveset_move(merged_moveset, get_moveset_move(moveset1, i), i);
@@ -614,7 +632,7 @@ void apply_all_moves(State &state, MoveSet &moveset)
         Move &move = get_moveset_move(moveset, i);
         Snake &snake = get_snake(state, get_move_snake_id(move));
 
-        reset_snake_state(snake);
+        reset_snake_state(snake); // useless
         apply_move(state, snake, move);
     }
 }
@@ -733,24 +751,27 @@ bool apply_snake_gravity(State &state, Snake &snake)
     {
         int min_y = MAX_HEIGHT;
 
-        // Verify if snake has one solid cell under it
+        // First, verify all body parts can move down (check out of bounds for all)
         for (int i = 0; i < snake_body_length; i++)
         {
             Pos pos = get_snake_body_pos(snake, i);
-
-            // Consider it's falling under the map
             if (is_south_cell_out_of_bounds(pos))
             {
                 kill_snake_immediately(state, snake, snake_body_length);
                 return true;
             }
+        }
 
+        // Then, check if any part is blocked by solid ground
+        for (int i = 0; i < snake_body_length; i++)
+        {
+            Pos pos = get_snake_body_pos(snake, i);
             Pos pos_below = get_south_pos(pos);
             int cell_below = get_cell(state, pos_below);
 
             // fprintf(stderr, "Snake %d: Is cell %d solid? (Pos=%d)\n", snake_id, cell_below, pos);
             if (is_cell_solid(cell_below, snake_id))
-                return gravity_applied;
+                return false;
 
             min_y = min(min_y, get_y(pos_below));
             new_snake_positions[i] = pos_below;
@@ -806,10 +827,8 @@ void apply_gravity(State &state)
 
 void apply_moveset(State &previous_state, State &state, MoveSet &moveset)
 {
-    int previous_turn = get_turn(state);
+    int previous_turn = get_turn(previous_state);
     set_turn(state, previous_turn + 1);
-    if (previous_turn == 200)
-        set_game_ended(state);
 
     // fprintf(stderr, "Applying moveset ...\n");
     apply_all_moves(state, moveset);
@@ -935,7 +954,7 @@ float evaluate_state(State &state, int player_id)
     if (player_id == map_properties.my_id)
         return get_game_points(state) + dist_score;
 
-    // Game points is positive if it's good for my player, negative if it's good for opponent, so we invert it for opponent evaluation
+    // Game points is positive if it's good for the player, negative if it's good for its opponent, so we invert it for opponent evaluation
     return -get_game_points(state) + dist_score;
 }
 
@@ -1002,6 +1021,7 @@ void consider_state_to_be_candidate(State &state, MoveSet &last_moveset, std::ve
 {
     // Save the new promising state if it's better than the current "worst best score"
     bool less_state_than_beam_width = (int)beam_search_candidates.size() < beam_width;
+    // Heuristic is generated for this player, so higher is better
     if (less_state_than_beam_width || get_heuristic(state) > get_heuristic(beam_search_candidates.back()))
     {
         // The candidate moveset for the current game turn choice
@@ -1250,19 +1270,69 @@ int main()
         // print_map(state, "Turn beginning");
         // print_map_bfs_distances(state);
 
-        MoveSet best_moveset = beam_search(state, map_properties.my_id, 100, 30, 48000);
+        MoveSet best_moveset;
+        try
+        {
+            // MoveSet turn_beginning_moveset = {};
+            // best_moveset = choose_player_moveset(state, map_properties.my_id, turn_beginning_moveset);
+            best_moveset = beam_search(state, map_properties.my_id, 20, 30, 30000);
+        }
+        catch (const std::exception &e)
+        {
+            fprintf(stderr, "\n========== EXCEPTION IN BEAM_SEARCH ==========\n");
+            fprintf(stderr, "Exception Type: std::exception\n");
+            fprintf(stderr, "Exception Message: %s\n", e.what());
+            fprintf(stderr, "\n--- PLAYER INFO ---\n");
+            fprintf(stderr, "My ID: %d\n", map_properties.my_id);
+            fprintf(stderr, "Opponent ID: %d\n", map_properties.opp_id);
+            fprintf(stderr, "My Alive Snakes: %d\n", get_player_alive_snake_count(state, map_properties.my_id));
+            fprintf(stderr, "Opponent Alive Snakes: %d\n", get_player_alive_snake_count(state, map_properties.opp_id));
+            fprintf(stderr, "Total Alive Snakes: %d\n", get_alive_snake_count(state));
+            fprintf(stderr, "\n--- MY SNAKES DETAIL ---\n");
+            for (int i = 0; i < get_player_alive_snake_count(state, map_properties.my_id); i++)
+            {
+                int snake_id = get_player_alive_snake_id(state, map_properties.my_id, i);
+                Snake &snake = get_snake(state, snake_id);
+                fprintf(stderr, "  Snake %d: length=%d, dying=%d\n", snake_id, get_snake_body_length(snake), is_snake_dying(snake));
+            }
+            fprintf(stderr, "\n--- OPPONENT SNAKES DETAIL ---\n");
+            for (int i = 0; i < get_player_alive_snake_count(state, map_properties.opp_id); i++)
+            {
+                int snake_id = get_player_alive_snake_id(state, map_properties.opp_id, i);
+                Snake &snake = get_snake(state, snake_id);
+                fprintf(stderr, "  Snake %d: length=%d, dying=%d\n", snake_id, get_snake_body_length(snake), is_snake_dying(snake));
+            }
+            fprintf(stderr, "===========================================\n\n");
+            exit(1);
+        }
+        catch (...)
+        {
+            fprintf(stderr, "\n========== UNKNOWN EXCEPTION IN BEAM_SEARCH ==========\n");
+            fprintf(stderr, "Exception Type: Unknown (not std::exception)\n");
+            fprintf(stderr, "\n--- PLAYER INFO ---\n");
+            fprintf(stderr, "My ID: %d\n", map_properties.my_id);
+            fprintf(stderr, "Opponent ID: %d\n", map_properties.opp_id);
+            fprintf(stderr, "My Alive Snakes: %d\n", get_player_alive_snake_count(state, map_properties.my_id));
+            fprintf(stderr, "Opponent Alive Snakes: %d\n", get_player_alive_snake_count(state, map_properties.opp_id));
+            fprintf(stderr, "Total Alive Snakes: %d\n", get_alive_snake_count(state));
+            fprintf(stderr, "\n--- BEAM SEARCH STATS ---\n");
+            fprintf(stderr, "Visited States: %d\n", visited_states_count);
+            fprintf(stderr, "Beam Search Depth Reached: %d\n", beam_search_depth);
+            fprintf(stderr, "========================================================\n\n");
+            exit(1);
+        }
         // print_moveset(best_moveset);
 
         fprintf(stderr, "Visited %d states\n", visited_states_count);
         fprintf(stderr, "Max depth reached: %d\n", beam_search_depth);
+
+        print_marks(state, best_moveset);
 
         if (get_moveset_move_count(best_moveset) == 0)
         {
             fprintf(stderr, "No best moveset found this turn !!!!!\n");
             exit(0);
         }
-
-        print_marks(state, best_moveset);
 
         for (int i = 0; i < get_moveset_move_count(best_moveset); i++)
         {

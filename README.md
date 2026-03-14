@@ -3,6 +3,24 @@ Winter Challenge 2026
 
 # TODO
 
+timeout solutions :
+    Not simulate opponent with fresh beam search
+    while true -> moveset_count < 81
+    remove BFS
+    metre le has_exceeded_time_limit apres chaque consider_state_to_be_candidate()
+    remove tous les vector ?
+    Replace recursive BFS with iterative BFS (must do)
+
+1. MAIN PROBLEM: Recursive BFS causes stack overflow (line 932-983)
+    find_closest_energy_cell_recursive recurses up to 3,250 times (one per cell in the padded map: 65x50). Each frame has local arrays (neighbors[4], neighbor_out_of_bounds[4], etc.) adding ~80-100 bytes per frame. That's ~260-325 KB of stack just for BFS.
+
+    This is called from within the beam search call chain which already stacks:
+
+    find_state_children_candidates: State next_state on stack (~29 KB) + MoveSet[81] (5.5 KB)
+    choose_player_moveset: State next_state on stack (~29 KB) + MoveSet[81] (5.5 KB)
+    apply_moveset: State colliding_state on stack (~29 KB)
+    Total peak stack: ~360 KB. A segfault from stack overflow is NOT a C++ exception - your try/catch blocks won't catch it. It just kills the process silently, which matches your symptom: "doesn't respond, doesn't throw an exception."
+
 - Crash quand on arrive en fin de game: Quand ya plus dernergy ?
 - Se jette sur un snake ou il y avait une energy ...
 - A faire après le beam search, pour correctement évaluer l'amélioration du ratio temps/précision de l'heuristic : Faire un nouveau DFS qui prends en compte la gravité et son body :
@@ -19,6 +37,11 @@ Winter Challenge 2026
 - apply_moveset: Plutot que d'avoir un previous state, on pourrait juste remove_snake_in_cells_from_their_old_positions au tout début de la fonction ?
 . Ensuite remove head et kill les snake directement dans la même fonction 
 
+POinters instead of state copy :
+    Short-term minimal change: store pointers (or std::unique_ptr<State>) in your candidate list instead of copying whole State. Alternatively, only push the heuristic + MoveSet first_depth_moveset + a compact representation of the state (e.g., differences). The quickest patch is to store std::shared_ptr<State> or std::unique_ptr<State>.
+
+Faster sorting :
+    After generating all children for this depth (or after generating all children for a parent), if beam_search_candidates.size() > beam_width, call std::nth_element/std::partial_sort to keep only top beam_width by heuristic, then resize vector.
 
 ## Strategies
 
