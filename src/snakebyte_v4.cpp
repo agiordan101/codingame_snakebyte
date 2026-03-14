@@ -601,6 +601,12 @@ void apply_move(State &state, Snake &snake, Move &move)
         set_snake_body_length(snake, get_snake_body_length(snake) - 1);
 
         // Body positions remain the same
+        if (get_snake_body_length(snake) < 3)
+        {
+            // fprintf(stderr, "Snake %d is dying from platform collision !\n");
+            // We can't remove it from alive snakes list now, so mark it dying for later
+            set_snake_dying(snake);
+        }
     }
     else
     {
