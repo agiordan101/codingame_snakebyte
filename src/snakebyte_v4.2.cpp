@@ -1,4 +1,4 @@
-// Version 4.1
+// Version 4.2
 
 // Algorithms :
 // v1 - Each snakes go to closest Energy cell using BFS
@@ -193,7 +193,10 @@ struct State
 {
     int turn;
     bool game_ended;
-    int game_points;           // Points difference between my id and opponent id
+    int my_points;
+    int opp_points;
+    int remaining_energy_count;
+
     int cells[MAX_CELL_COUNT]; // 0-7: snake_id, 8: CELL_EMPTY, 9: CELL_PLATFORM, 10: CELL_ENERGY
 
     Snake snakes[MAX_SNAKE_COUNT]; // 0-7: snakes
@@ -215,7 +218,9 @@ struct State
 
 int get_turn(State &state) { return state.turn; }
 bool is_game_ended(State &state) { return state.game_ended; }
-int get_game_points(State &state) { return state.game_points; }
+int get_my_points(State &state) { return state.my_points; }
+int get_opp_points(State &state) { return state.opp_points; }
+int get_remaining_energy_count(State &state) { return state.remaining_energy_count; }
 int get_cell(State &state, Pos pos) { return state.cells[pos]; }
 Snake &get_snake(State &state, int snake_id) { return state.snakes[snake_id]; }
 int get_player_alive_snake_count(State &state, int player_id) { return state.player_alive_snake_count[player_id]; }
@@ -227,6 +232,10 @@ MoveSet &get_first_depth_moveset(State &state) { return state.first_depth_movese
 
 void set_turn(State &state, int turn) { state.turn = turn; }
 void set_game_ended(State &state) { state.game_ended = true; }
+void set_my_points(State &state, int points) { state.my_points = points; }
+void set_opp_points(State &state, int points) { state.opp_points = points; }
+void set_energy_count(State &state, int count) { state.energy_count = count; }
+void set_remaining_energy_count(State &state, int count) { state.remaining_energy_count = count; }
 void set_cell(State &state, Pos pos, int value) { state.cells[pos] = value; }
 void set_energy(State &state, int index, Pos pos) { state.energies[index] = pos; }
 void set_heuristic(State &state, float heuristic) { state.heuristic = heuristic; }
@@ -294,51 +303,25 @@ void remove_snake_from_alive_snake_ids(State &state, int snake_id, int player_id
 
 void update_game_points(State &state)
 {
-    int my_snake_count = get_player_alive_snake_count(state, map_properties.my_id);
-    if (my_snake_count == 0)
-    {
-        set_game_ended(state);
-        // Set a high negative score if we lost, weighted by the turn number to prioritize losing later than sooner
-        state.game_points = -100 * get_turn(state);
-        return;
-    }
-
-    int opp_snake_count = get_player_alive_snake_count(state, map_properties.opp_id);
-    if (opp_snake_count == 0)
-    {
-        set_game_ended(state);
-        // Set a high positive score if we win, weighted by the turn number to prioritize winning sooner than later
-        state.game_points = 100 * (201 - get_turn(state));
-        return;
-    }
-
     // Sum lengths of alive snakes for my player
     int my_total_length = 0;
-    for (int i = 0; i < my_snake_count; i++)
+    for (int i = 0; i < get_player_alive_snake_count(state, map_properties.my_id); i++)
     {
         int snake_id = get_player_alive_snake_id(state, map_properties.my_id, i);
         Snake &snake = get_snake(state, snake_id);
         my_total_length += get_snake_body_length(snake);
     }
+    set_my_points(state, my_total_length);
 
     // Sum lengths of alive snakes for opponent
     int opp_total_length = 0;
-    for (int i = 0; i < opp_snake_count; i++)
+    for (int i = 0; i < get_player_alive_snake_count(state, map_properties.opp_id); i++)
     {
         int snake_id = get_player_alive_snake_id(state, map_properties.opp_id, i);
         Snake &snake = get_snake(state, snake_id);
         opp_total_length += get_snake_body_length(snake);
     }
-
-    // Calculate difference - Positive game points is better for my player
-    state.game_points = my_total_length - opp_total_length;
-
-    if (get_turn(state) == 200)
-    {
-        set_game_ended(state);
-        // Make the score difference more important at the end of the game, to prioritize winning more than heuristics objectives
-        state.game_points *= 100;
-    }
+    set_opp_points(state, opp_total_length);
 }
 
 /* --- TOOL FUNCTIONS --- */
@@ -362,7 +345,7 @@ int find_closest_energy_cell(State &state, Pos start_pos, Pos &closest_energy_ce
 void print_cells(State &state, string title = "")
 {
     if (title != "")
-        fprintf(stderr, "(dPoint=%d) %s\n", get_game_points(state), title.c_str());
+        fprintf(stderr, "(dPoint=%d) %s\n", get_my_points(state) - get_opp_points(state), title.c_str());
 
     for (int y = 0; y < MAX_HEIGHT; y++)
     {
@@ -392,7 +375,7 @@ void print_cells(State &state, string title = "")
 void print_map(State &state, string title = "")
 {
     if (title != "")
-        fprintf(stderr, "(dPoint=%d) %s\n", get_game_points(state), title.c_str());
+        fprintf(stderr, "(dPoint=%d) %s\n", get_my_points(state) - get_opp_points(state), title.c_str());
 
     for (int y = 0; y < map_properties.height; y++)
     {
@@ -622,6 +605,7 @@ void apply_move(State &state, Snake &snake, Move &move)
         if (cell_at_new_head_pos == CELL_ENERGY)
         {
             set_cell(state, new_head_pos, CELL_EMPTY); // Remove the energy cel (even if two snakes will collide on it)
+            set_remaining_energy_count(state, get_remaining_energy_count(state) - 1);
 
             // Move the whole body positions, instead of loosing the tail position
             body_length_to_move = get_snake_body_length(snake);
@@ -862,6 +846,12 @@ void apply_moveset(State &previous_state, State &state, MoveSet &moveset)
     apply_gravity(state);
     update_game_points(state);
 
+    if (get_turn(state) == 200 ||
+        get_player_alive_snake_count(state, map_properties.my_id) == 0 ||
+        get_player_alive_snake_count(state, map_properties.opp_id) == 0 ||
+        get_remaining_energy_count(state) == 0)
+        set_game_ended(state);
+
     // if (moveset.moves[4].dst_pos == get_pos_from_map_coord(10, 15) && moveset.moves[5].dst_pos == get_pos_from_map_coord(5, 10) && moveset.moves[6].dst_pos == get_pos_from_map_coord(32, 20) && moveset.moves[7].dst_pos == get_pos_from_map_coord(42, 20))
     // {
     //     update_game_points(state);
@@ -949,6 +939,21 @@ int find_closest_energy_cell(State &state, Pos start_pos, Pos &closest_energy_ce
 
 float evaluate_state(State &state, int player_id)
 {
+    // Set a high negative score if we lost, weighted by the turn number to prioritize losing later than sooner
+    int player_points = player_id == map_properties.my_id ? get_my_points(state) : get_opp_points(state);
+    if (player_points == 0)
+        return -100 * (201 - get_turn(state));
+
+    // Set a high positive score if we win, weighted by the turn number to prioritize winning sooner than later
+    int opponent_points = player_id == map_properties.my_id ? get_opp_points(state) : get_my_points(state);
+    if (opponent_points == 0)
+        return 100 * (201 - get_turn(state));
+
+    // Make the score difference more important at the end of the game, to prioritize winning more than heuristics objectives
+    int game_points = player_points - opponent_points;
+    if (get_turn(state) == 200 || get_remaining_energy_count(state) == 0)
+        return game_points * 10;
+
     int dist_sum = 0;
     for (int i = 0; i < get_player_alive_snake_count(state, player_id); i++)
     {
@@ -965,11 +970,8 @@ float evaluate_state(State &state, int player_id)
 
     float dist_score = dist_sum != 0 ? 1.0 / dist_sum : 0.0;
 
-    if (player_id == map_properties.my_id)
-        return get_game_points(state) + dist_score;
-
     // Game points is positive if it's good for the player, negative if it's good for its opponent, so we invert it for opponent evaluation
-    return -get_game_points(state) + dist_score;
+    return game_points + dist_score;
 }
 
 MoveSet choose_best_player_moveset(State &state, int player_id, MoveSet &previous_player_moveset)
@@ -1108,16 +1110,12 @@ void consider_state_to_be_candidate(State &state, MoveSet &last_moveset, std::ve
     }
 }
 
-void find_candidates_among_state_children(State &state, int player_id, int depth, std::vector<State> &beam_search_candidates, int beam_width, auto start_turn_chrono, int maximum_microseconds)
+void find_candidates_among_state_children(State &state, int player_id, std::vector<State> &beam_search_candidates, int beam_width, auto start_turn_chrono, int maximum_microseconds)
 {
     MoveSet turn_beginning_moveset = {};
     set_moveset_move_count(turn_beginning_moveset, 0);
 
-    MoveSet opponent_moveset;
-    if (depth == 1)
-        opponent_moveset = choose_best_player_moveset(state, get_opponent_id(player_id), turn_beginning_moveset);
-    else
-        opponent_moveset = choose_best_snake_moves(state, get_opponent_id(player_id));
+    MoveSet opponent_moveset = choose_best_player_moveset(state, get_opponent_id(player_id), turn_beginning_moveset);
 
     MoveSet ally_movesets[MAX_PLAYER_MOVE_SETS];
     int ally_moveset_count = generate_player_movesets(state, player_id, ally_movesets);
@@ -1151,7 +1149,7 @@ MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam
     // TODO: use beam_search_states directly
     // Create and initialize the candidates list with the initial state children
     std::vector<State> beam_search_candidates;
-    find_candidates_among_state_children(initial_state, player_id, beam_search_depth, beam_search_candidates, beam_width, start_turn_chrono, maximum_microseconds);
+    find_candidates_among_state_children(initial_state, player_id, beam_search_candidates, beam_width, start_turn_chrono, maximum_microseconds);
 
     // Create and initialize the beam search states with the initial state children
     // We absolutely not want the initial_state in the beam search states, because it has no moveset to return
@@ -1179,7 +1177,7 @@ MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam
                 continue;
             }
 
-            find_candidates_among_state_children(state, player_id, beam_search_depth, beam_search_candidates, beam_width, start_turn_chrono, maximum_microseconds);
+            find_candidates_among_state_children(state, player_id, beam_search_candidates, beam_width, start_turn_chrono, maximum_microseconds);
 
             if (has_exceeded_time_limit(start_turn_chrono, maximum_microseconds))
             {
@@ -1289,8 +1287,9 @@ void parse_snakebot(State &state, Snake &snake, int snakebotId, string bodyStr)
 
 void parse_turn_inputs(State &state)
 {
-    cin >> state.energy_count;
-    for (int i = 0; i < state.energy_count; i++)
+    int energy_count;
+    cin >> energy_count;
+    for (int i = 0; i < energy_count; i++)
     {
         int x, y;
         cin >> x >> y;
@@ -1301,6 +1300,8 @@ void parse_turn_inputs(State &state)
         set_energy(state, i, pos);
         set_cell(state, state.energies[i], CELL_ENERGY);
     }
+    set_energy_count(state, energy_count);
+    set_remaining_energy_count(state, energy_count);
 
     reset_alive_snake_count(state);
 
@@ -1322,13 +1323,23 @@ void parse_turn_inputs(State &state)
 
 /* --- MAIN LOOP --- */
 
-void signal_handler(int signal) {
-    const char* signal_name = nullptr;
-    switch (signal) {
-        case SIGSEGV: signal_name = "SIGSEGV (Segmentation Fault)"; break;
-        case SIGABRT: signal_name = "SIGABRT (Abort)"; break;
-        case SIGFPE:  signal_name = "SIGFPE (Floating Point Exception)"; break;
-        default:      signal_name = "Unknown signal"; break;
+void signal_handler(int signal)
+{
+    const char *signal_name = nullptr;
+    switch (signal)
+    {
+    case SIGSEGV:
+        signal_name = "SIGSEGV (Segmentation Fault)";
+        break;
+    case SIGABRT:
+        signal_name = "SIGABRT (Abort)";
+        break;
+    case SIGFPE:
+        signal_name = "SIGFPE (Floating Point Exception)";
+        break;
+    default:
+        signal_name = "Unknown signal";
+        break;
     }
 
     // Print error message to stderr
@@ -1343,7 +1354,7 @@ int main()
     // Register signal handlers
     signal(SIGSEGV, signal_handler); // Segmentation fault
     signal(SIGABRT, signal_handler); // Abort
-    signal(SIGFPE,  signal_handler);  // Floating point exception
+    signal(SIGFPE, signal_handler);  // Floating point exception
 
     State initial_state;
     bzero(&initial_state, sizeof(initial_state));
