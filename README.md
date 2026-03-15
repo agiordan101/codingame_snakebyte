@@ -135,13 +135,21 @@ MoveSet -> A list of Move
 
 ## History
 
+# v4.2
+
+Heuristic : Replace BFS by Manhattan distance
+
+League: Silver (max)
+Begin at position : -/1800
+Ending at position: -/-
+
 # v4.1 (Worst than v4)
 
 For depth > 1, stop simulating the opponent by choosing among all move combinaisons, but choose best snake move one by one (using previous snake moves).
 
 League: Silver (max)
 Begin at position : 320/1800
-Ending at position: -/-
+Ending at position: 300/1800
 
 # v4
 
