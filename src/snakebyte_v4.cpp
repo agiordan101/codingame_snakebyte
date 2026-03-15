@@ -13,7 +13,6 @@
 //        - Correctly remove snake id from player alive list
 //        - Snake weren't checking collisions with their own body
 // v4 - Beam search : Strategy explained in README.md
-//   v4.1 - Generate opponent moveset by anticipating our next move
 
 #undef _GLIBCXX_DEBUG
 #pragma GCC optimize("Ofast,unroll-loops,omit-frame-pointer,inline")
@@ -1053,7 +1052,7 @@ void consider_state_to_be_candidate(State &state, MoveSet &last_moveset, std::ve
     }
 }
 
-void find_state_children_candidates(State &state, int player_id, std::vector<State> &beam_search_candidates, int beam_width)
+void find_state_children_candidates(State &state, int player_id, std::vector<State> &beam_search_candidates, int beam_width, auto start_turn_chrono, int maximum_microseconds)
 {
     MoveSet turn_beginning_moveset = {};
     set_moveset_move_count(turn_beginning_moveset, 0);
@@ -1077,19 +1076,21 @@ void find_state_children_candidates(State &state, int player_id, std::vector<Sta
         consider_state_to_be_candidate(next_state, ally_movesets[i], beam_search_candidates, beam_width);
 
         visited_states_count++;
+        
+        if (has_exceeded_time_limit(start_turn_chrono, maximum_microseconds))
+            return;
     }
 }
 
-MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam_width, int maximum_microseconds)
+MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam_width, int maximum_microseconds, auto start_turn_chrono)
 {
     fprintf(stderr, "Starting beam_search: player_id=%d, depth_max=%d, beam_width=%d, max_time_us=%d\n", player_id, depth_max, beam_width, maximum_microseconds);
-    auto beam_start_chrono = chrono::high_resolution_clock::now();
     visited_states_count = 0;
     beam_search_depth = 0;
 
     // Create and initialize the candidates list with the initial state children
     std::vector<State> beam_search_candidates;
-    find_state_children_candidates(initial_state, player_id, beam_search_candidates, beam_width);
+    find_state_children_candidates(initial_state, player_id, beam_search_candidates, beam_width, start_turn_chrono, maximum_microseconds);
 
     // Create and initialize the beam search states with the initial state children
     // We absolutely not want the initial_state in the beam search states, because it has no moveset to return
@@ -1099,10 +1100,10 @@ MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam
 
     fprintf(stderr, "Initialized beam_search_states with initial state children\n");
 
-    while (!has_exceeded_time_limit(beam_start_chrono, maximum_microseconds) && beam_search_depth < depth_max)
+    while (!has_exceeded_time_limit(start_turn_chrono, maximum_microseconds) && beam_search_depth < depth_max)
     {
         beam_search_depth++;
-        fprintf(stderr, "Start beam search depth %d (%ld ym remaining)\n", beam_search_depth, maximum_microseconds - chrono::duration_cast<chrono::microseconds>(chrono::high_resolution_clock::now() - beam_start_chrono).count());
+        fprintf(stderr, "Start beam search depth %d (%ld ym remaining)\n", beam_search_depth, maximum_microseconds - chrono::duration_cast<chrono::microseconds>(chrono::high_resolution_clock::now() - start_turn_chrono).count());
 
         beam_search_candidates.clear();
         beam_search_candidates.reserve(beam_width);
@@ -1117,9 +1118,9 @@ MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam
                 continue;
             }
 
-            find_state_children_candidates(state, player_id, beam_search_candidates, beam_width);
+            find_state_children_candidates(state, player_id, beam_search_candidates, beam_width, start_turn_chrono, maximum_microseconds);
 
-            if (has_exceeded_time_limit(beam_start_chrono, maximum_microseconds))
+            if (has_exceeded_time_limit(start_turn_chrono, maximum_microseconds))
             {
                 fprintf(stderr, "Time limit exceeded during moveset generation. beam_search_states.size()=%d, beam_search_candidates.size()=%d\n", (int)beam_search_states.size(), (int)beam_search_candidates.size());
 
@@ -1286,7 +1287,7 @@ int main()
         {
             // MoveSet turn_beginning_moveset = {};
             // best_moveset = choose_player_moveset(state, map_properties.my_id, turn_beginning_moveset);
-            best_moveset = beam_search(state, map_properties.my_id, 20, 30, 45000);
+            best_moveset = beam_search(state, map_properties.my_id, 20, 30, 45000, start_turn_chrono);
         }
         catch (const std::exception &e)
         {

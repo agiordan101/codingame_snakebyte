@@ -108,8 +108,20 @@ MoveSet -> A list of Move
 + Snake weren't checking collisions with their own body
 
 League: Silver (max)
+Begin at position : /1580
+Ending at position: -/-
+
+# v3.1
+
++ Apply opponent moveset in each simulated moveset
++ Fix collisions simulation
++ Fix cells application
++ Correctly remove snake id from player alive list
++ Snake weren't checking collisions with their own body
+
+League: Silver (max)
 Begin at position : 155/1580
-Ending at position: 145/1600
+Ending at position: 235/1730
 
 # v2.1 = v3 (lot of bugs)
 
