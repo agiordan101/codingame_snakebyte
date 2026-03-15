@@ -3,6 +3,11 @@ Winter Challenge 2026
 
 # TODO
 
+Facts: 
+Crash when simulating the opponent with choose_player_moveset (even if we don't use the opponent moveset ! Suggest memory limit reached ? Issues)
+Don't crash when generating random opponent moveset, but do when using the result 
+    Replace opponent move selectino by just greedy BFS on all snakes
+
 timeout solutions :
     Not simulate opponent with fresh beam search
     while true -> moveset_count < 81
@@ -10,16 +15,6 @@ timeout solutions :
     metre le has_exceeded_time_limit apres chaque consider_state_to_be_candidate()
     remove tous les vector ?
     Replace recursive BFS with iterative BFS (must do)
-
-1. MAIN PROBLEM: Recursive BFS causes stack overflow (line 932-983)
-    find_closest_energy_cell_recursive recurses up to 3,250 times (one per cell in the padded map: 65x50). Each frame has local arrays (neighbors[4], neighbor_out_of_bounds[4], etc.) adding ~80-100 bytes per frame. That's ~260-325 KB of stack just for BFS.
-
-    This is called from within the beam search call chain which already stacks:
-
-    find_state_children_candidates: State next_state on stack (~29 KB) + MoveSet[81] (5.5 KB)
-    choose_player_moveset: State next_state on stack (~29 KB) + MoveSet[81] (5.5 KB)
-    apply_moveset: State colliding_state on stack (~29 KB)
-    Total peak stack: ~360 KB. A segfault from stack overflow is NOT a C++ exception - your try/catch blocks won't catch it. It just kills the process silently, which matches your symptom: "doesn't respond, doesn't throw an exception."
 
 - Crash quand on arrive en fin de game: Quand ya plus dernergy ?
 - Se jette sur un snake ou il y avait une energy ...

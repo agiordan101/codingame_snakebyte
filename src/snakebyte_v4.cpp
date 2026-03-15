@@ -476,7 +476,7 @@ int generate_snake_moves(Snake &snake, Pos moves[3])
     return move_count;
 }
 
-int generate_player_movesets(State &state, int player_id, MoveSet movesets[])
+int generate_player_movesets(State &state, int player_id, MoveSet movesets[MAX_PLAYER_MOVE_SETS])
 {
     int snake_count = get_player_alive_snake_count(state, player_id);
     int snake_ids[snake_count];
@@ -787,6 +787,7 @@ bool apply_snake_gravity(State &state, Snake &snake)
         for (int i = 0; i < snake_body_length; i++)
             set_cell(state, get_snake_body_pos(snake, i), CELL_EMPTY);
 
+        // Useless
         // If its maximum position is the map height, it's falling under the map
         // Do not add the snake in the cells
         if (min_y >= map_properties.height + MAP_PADDING)
@@ -826,7 +827,7 @@ void apply_gravity(State &state)
             gravity_finalized_count++;
 
         // Loop over alive snakes indefinitely
-        if (++snake_index == get_alive_snake_count(state))
+        if (++snake_index >= get_alive_snake_count(state))
             snake_index = 0;
     }
 }
