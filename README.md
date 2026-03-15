@@ -3,29 +3,21 @@ Winter Challenge 2026
 
 # TODO
 
-Facts: 
-Crash when simulating the opponent with choose_player_moveset (even if we don't use the opponent moveset ! Suggest memory limit reached ? Issues)
-Don't crash when generating random opponent moveset, but do when using the result 
-    Replace opponent move selectino by just greedy BFS on all snakes
+After publishing v4: Still rare crash - Happen on map edges, after an enemy snake fall
 
 timeout solutions :
-    Not simulate opponent with fresh beam search
     while true -> moveset_count < 81
-    remove BFS
-    metre le has_exceeded_time_limit apres chaque consider_state_to_be_candidate()
     remove tous les vector ?
     Replace recursive BFS with iterative BFS (must do)
 
-- Crash quand on arrive en fin de game: Quand ya plus dernergy ?
-- Se jette sur un snake ou il y avait une energy ...
-- A faire après le beam search, pour correctement évaluer l'amélioration du ratio temps/précision de l'heuristic : Faire un nouveau DFS qui prends en compte la gravité et son body :
-    On prends l'état actuel
-    On fait bouger que ce snake
-    en v1: On considère une seule fois les cases où la tête est passée
-    en v1: On shift les pos du body ?
 - Tester d'autres heuristic :
     - Manhattan à la place de BFS
-    - Générer une map de BFS au premier tour !
+    - Générer une map de BFS au premier tour !?
+    - A faire après le beam search, pour correctement évaluer l'amélioration du ratio temps/précision de l'heuristic : Faire un nouveau DFS qui prends en compte la gravité et son body :
+        On prends l'état actuel
+        On fait bouger que ce snake
+        en v1: On considère une seule fois les cases où la tête est passée
+        en v1: On shift les pos du body ?
 - Collisions :
   Plutot que d'avoir un state previous ou resolved et dying flag on ourrait :
   renvoyer une liste des snake qui collide dans handle_snake_collisions (donc avoir 1 seul state en param)
@@ -99,16 +91,12 @@ MoveSet -> A list of Move
 
 ## History
 
-# v3.1
+# v4
 
-+ Apply opponent moveset in each simulated moveset
-+ Fix collisions simulation
-+ Fix cells application
-+ Correctly remove snake id from player alive list
-+ Snake weren't checking collisions with their own body
+Beam search : Strategy explained below
 
 League: Silver (max)
-Begin at position : /1580
+Begin at position : 146/1732
 Ending at position: -/-
 
 # v3.1
