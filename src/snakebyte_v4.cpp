@@ -1130,19 +1130,9 @@ MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam
                     return get_first_depth_moveset(beam_search_candidates[0]);
             }
         }
-
-        // If no candidates were found at this depth, stop expanding
-        if (beam_search_candidates.empty())
-            break;
-
+        
         // Move vector data from beam_next_states to beam_current_states (Quicker than copying)
         beam_search_states = std::move(beam_search_candidates);
-    }
-
-    if (beam_search_states.empty())
-    {
-        MoveSet useless_moveset = {};
-        return choose_player_moveset(initial_state, player_id, useless_moveset);
     }
 
     fprintf(stderr, "Time limit exceeded after a complete depth generation\n");
