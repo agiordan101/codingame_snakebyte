@@ -1,7 +1,7 @@
 # codingame_snakebyte
 Winter Challenge 2026
 
-# TODO
+## TODO
 
 After publishing v4: Still rare crash - Happen on map edges, after an enemy snake fall
 
@@ -28,6 +28,34 @@ POinters instead of state copy :
 
 Faster sorting :
     After generating all children for this depth (or after generating all children for a parent), if beam_search_candidates.size() > beam_width, call std::nth_element/std::partial_sort to keep only top beam_width by heuristic, then resize vector.
+
+## Run commands
+
+To compete 2 bots (100 silver games with 4 threads) :
+
+```bash
+make && cg-colosseum battle --preset winter2026 -d league=2 -n 100 -t 4 \
+  --p1 ./bin/snakebyte_v4.1 \
+  --p2 ./bin/snakebyte_v4
+```
+
+To analyze a specific game :
+
+```bash
+make && cg-colosseum replay --preset winter2026 -d league=2 \
+  --p1 "./bin/snakebyte_v4.1" \
+  --p2 ./bin/snakebyte_v4 \
+  --seed=-7137723507467264000 \
+  --view
+```
+
+For debug memory issues (Generate file valgrind.log) :
+
+```bash
+make && cg-colosseum battle --preset winter2026 -d league=2 -n 1 -t 1 \
+  --p1 "valgrind -s --leak-check=full --track-origins=yes --log-file=valgrind.log ./bin/snakebyte_v4.1" \
+  --p2 ./bin/snakebyte_v4
+```
 
 ## Strategies
 
@@ -89,6 +117,14 @@ MoveSet -> A list of Move
     - Move best 'beam_width' states from beam_search_candidates to beam_search_states
 
 ## History
+
+# v4.1
+
+For depth > 1, stop simulating the opponent by choosing among all move combinaisons, but choose best snake move one by one (using previous snake moves)
+
+League: Silver (max)
+Begin at position : -/1800
+Ending at position: -/-
 
 # v4
 

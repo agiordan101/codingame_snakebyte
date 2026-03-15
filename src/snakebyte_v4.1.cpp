@@ -1,4 +1,4 @@
-// Version 4
+// Version 4.1
 
 // Algorithms :
 // v1 - Each snakes go to closest Energy cell using BFS
@@ -13,6 +13,9 @@
 //        - Correctly remove snake id from player alive list
 //        - Snake weren't checking collisions with their own body
 // v4 - Beam search : Strategy explained in README.md
+//   v4.1 - For depth > 1, stop simulating the opponent by choosing among all move combinaisons, but choose best snake move one by one (using previous snake moves)
+//              So they still work together but the first ones have leading.
+//              For 4 snakes, we're not simulating 3^4=81 movesets but 3*4=12 movesets.
 
 #undef _GLIBCXX_DEBUG
 #pragma GCC optimize("Ofast,unroll-loops,omit-frame-pointer,inline")
@@ -509,7 +512,7 @@ int generate_player_movesets(State &state, int player_id, MoveSet movesets[MAX_P
     }
 
     int moveset_count = 0;
-    while (true)
+    while (moveset_count < MAX_PLAYER_MOVE_SETS)
     {
         // Create a moveset with the current combination of moves
         MoveSet moveset;
@@ -969,7 +972,7 @@ float evaluate_state(State &state, int player_id)
     return -get_game_points(state) + dist_score;
 }
 
-MoveSet choose_player_moveset(State &state, int player_id, MoveSet &previous_player_moveset)
+MoveSet choose_best_player_moveset(State &state, int player_id, MoveSet &previous_player_moveset)
 {
     State next_state;
     // fprintf(stderr, "Choosing move set for player %d ...\n", player_id);
@@ -999,6 +1002,54 @@ MoveSet choose_player_moveset(State &state, int player_id, MoveSet &previous_pla
     }
 
     return best_moveset;
+}
+
+MoveSet choose_best_snake_moves(State &state, int player_id)
+{
+    MoveSet best_snake_moves;
+    State next_state;
+
+    int snake_count = get_player_alive_snake_count(state, player_id);
+
+    for (int i = 0; i < snake_count; i++)
+    {
+        int snake_id = get_player_alive_snake_id(state, player_id, i);
+        Snake &snake = get_snake(state, snake_id);
+
+        Pos snake_moves[3];
+        int snake_move_count = generate_snake_moves(snake, snake_moves);
+
+        int best_move_evaluation = -100000;
+        Move best_snake_move = {};
+        for (int j = 0; j < snake_move_count; j++)
+        {
+            // Construct a moveset with only this move for this snake
+            MoveSet snake_moveset;
+            set_moveset_move_count(snake_moveset, 1);
+            Move &move = get_moveset_move(snake_moveset, 0);
+            set_move_snake_id(move, snake_id);
+            set_move_dst_pos(move, snake_moves[j]);
+
+            // Still include other player snake moves already selected, to not generate dump movesets
+            MoveSet turn_moveset = merge_movesets(best_snake_moves, snake_moveset);
+
+            memcpy(&next_state, &state, sizeof(State));
+            apply_moveset(state, next_state, turn_moveset);
+
+            float evaluation = evaluate_state(next_state, player_id);
+
+            if (evaluation > best_move_evaluation)
+            {
+                best_move_evaluation = evaluation;
+                best_snake_move = move;
+            }
+        }
+
+        set_moveset_move(best_snake_moves, best_snake_move, i);
+        set_moveset_move_count(best_snake_moves, i + 1);
+    }
+
+    return best_snake_moves;
 }
 
 void print_marks(State &state, MoveSet best_moveset)
@@ -1036,7 +1087,7 @@ void consider_state_to_be_candidate(State &state, MoveSet &last_moveset, std::ve
     if (less_state_than_beam_width || get_heuristic(state) > get_heuristic(beam_search_candidates.back()))
     {
         // The candidate moveset for the current game turn choice
-        if (beam_search_depth == 0)
+        if (beam_search_depth == 1)
             set_first_depth_moveset(state, last_moveset);
 
         // Find the first element with a score less than the current one (in descending
@@ -1057,16 +1108,20 @@ void consider_state_to_be_candidate(State &state, MoveSet &last_moveset, std::ve
     }
 }
 
-void find_state_children_candidates(State &state, int player_id, std::vector<State> &beam_search_candidates, int beam_width, auto start_turn_chrono, int maximum_microseconds)
+void find_candidates_among_state_children(State &state, int player_id, int depth, std::vector<State> &beam_search_candidates, int beam_width, auto start_turn_chrono, int maximum_microseconds)
 {
     MoveSet turn_beginning_moveset = {};
     set_moveset_move_count(turn_beginning_moveset, 0);
 
-    MoveSet opponent_moveset = choose_player_moveset(state, get_opponent_id(player_id), turn_beginning_moveset);
-    
+    MoveSet opponent_moveset;
+    if (depth == 1)
+        opponent_moveset = choose_best_player_moveset(state, get_opponent_id(player_id), turn_beginning_moveset);
+    else
+        opponent_moveset = choose_best_snake_moves(state, get_opponent_id(player_id));
+
     MoveSet ally_movesets[MAX_PLAYER_MOVE_SETS];
     int ally_moveset_count = generate_player_movesets(state, player_id, ally_movesets);
-    
+
     State next_state;
     for (int i = 0; i < ally_moveset_count; i++)
     {
@@ -1081,7 +1136,7 @@ void find_state_children_candidates(State &state, int player_id, std::vector<Sta
         consider_state_to_be_candidate(next_state, ally_movesets[i], beam_search_candidates, beam_width);
 
         visited_states_count++;
-        
+
         if (has_exceeded_time_limit(start_turn_chrono, maximum_microseconds))
             return;
     }
@@ -1091,11 +1146,12 @@ MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam
 {
     fprintf(stderr, "Starting beam_search: player_id=%d, depth_max=%d, beam_width=%d, max_time_us=%d\n", player_id, depth_max, beam_width, maximum_microseconds);
     visited_states_count = 0;
-    beam_search_depth = 0;
+    beam_search_depth = 1;
 
+    // TODO: use beam_search_states directly
     // Create and initialize the candidates list with the initial state children
     std::vector<State> beam_search_candidates;
-    find_state_children_candidates(initial_state, player_id, beam_search_candidates, beam_width, start_turn_chrono, maximum_microseconds);
+    find_candidates_among_state_children(initial_state, player_id, beam_search_depth, beam_search_candidates, beam_width, start_turn_chrono, maximum_microseconds);
 
     // Create and initialize the beam search states with the initial state children
     // We absolutely not want the initial_state in the beam search states, because it has no moveset to return
@@ -1103,7 +1159,7 @@ MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam
     beam_search_states.reserve(beam_width);
     beam_search_states = std::move(beam_search_candidates);
 
-    fprintf(stderr, "Initialized beam_search_states with initial state children\n");
+    fprintf(stderr, "Initialized beam_search_states with state children at depth=%d\n", beam_search_depth);
 
     while (!has_exceeded_time_limit(start_turn_chrono, maximum_microseconds) && beam_search_depth < depth_max)
     {
@@ -1123,7 +1179,7 @@ MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam
                 continue;
             }
 
-            find_state_children_candidates(state, player_id, beam_search_candidates, beam_width, start_turn_chrono, maximum_microseconds);
+            find_candidates_among_state_children(state, player_id, beam_search_depth, beam_search_candidates, beam_width, start_turn_chrono, maximum_microseconds);
 
             if (has_exceeded_time_limit(start_turn_chrono, maximum_microseconds))
             {
@@ -1136,7 +1192,7 @@ MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam
                     return get_first_depth_moveset(beam_search_candidates[0]);
             }
         }
-        
+
         // Move vector data from beam_next_states to beam_current_states (Quicker than copying)
         beam_search_states = std::move(beam_search_candidates);
     }
