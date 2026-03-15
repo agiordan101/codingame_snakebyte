@@ -12,6 +12,7 @@ timeout solutions :
 - Tester d'autres heuristic :
     - Manhattan à la place de BFS
     - Générer une map de BFS au premier tour !?
+    - Avoir un BFS avec gravité qui determine si un snake peut ateindre une energy, sinon faire en sorte qu'il se raproche de la queue d'un allié
     - A faire après le beam search, pour correctement évaluer l'amélioration du ratio temps/précision de l'heuristic : Faire un nouveau DFS qui prends en compte la gravité et son body :
         On prends l'état actuel
         On fait bouger que ce snake
@@ -34,27 +35,43 @@ Faster sorting :
 To compete 2 bots (100 silver games with 4 threads) :
 
 ```bash
-make && cg-colosseum battle --preset winter2026 -d league=2 -n 100 -t 4 \
-  --p1 ./bin/snakebyte_v4.1 \
-  --p2 ./bin/snakebyte_v4
+make && \
+cg-colosseum battle \
+    --preset winter2026 -d league=2 -n 100 -t 4 \
+    --p1 ./bin/snakebyte_v4 \
+    --p2 ./bin/snakebyte_v4
 ```
 
 To analyze a specific game :
 
 ```bash
-make && cg-colosseum replay --preset winter2026 -d league=2 \
-  --p1 "./bin/snakebyte_v4.1" \
-  --p2 ./bin/snakebyte_v4 \
-  --seed=-7137723507467264000 \
-  --view
+make && \
+cg-colosseum replay \
+    --preset winter2026 -d league=2 \
+    --p1 "./bin/snakebyte_v4" \
+    --p2 ./bin/snakebyte_v4 \
+    --seed=-7137723507467264000 \
+    --view
+```
+
+To analyze time consumption (Generate file callgrind.out.*) :
+
+```bash
+make && \
+cg-colosseum battle \
+    --preset winter2026 -d league=2 -n 1 -t 1 \
+    --p1 "valgrind --tool=callgrind ./bin/snakebyte_v4" \
+    --p2 ./bin/snakebyte_4
 ```
 
 For debug memory issues (Generate file valgrind.log) :
 
 ```bash
-make && cg-colosseum battle --preset winter2026 -d league=2 -n 1 -t 1 \
-  --p1 "valgrind -s --leak-check=full --track-origins=yes --log-file=valgrind.log ./bin/snakebyte_v4.1" \
-  --p2 ./bin/snakebyte_v4
+make && \
+cg-colosseum battle \
+    --preset winter2026 -d league=2 -n 1 -t 1 \
+    --p1 "valgrind -s --leak-check=full --track-origins=yes --log-file=valgrind.log ./bin/snakebyte_v4" \
+    --p2 ./bin/snakebyte_v4
 ```
 
 ## Strategies
@@ -118,12 +135,12 @@ MoveSet -> A list of Move
 
 ## History
 
-# v4.1
+# v4.1 (Worst than v4)
 
-For depth > 1, stop simulating the opponent by choosing among all move combinaisons, but choose best snake move one by one (using previous snake moves)
+For depth > 1, stop simulating the opponent by choosing among all move combinaisons, but choose best snake move one by one (using previous snake moves).
 
 League: Silver (max)
-Begin at position : -/1800
+Begin at position : 320/1800
 Ending at position: -/-
 
 # v4
