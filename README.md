@@ -6,7 +6,6 @@ Winter Challenge 2026
 After publishing v4: Still rare crash - Happen on map edges, after an enemy snake fall
 
 timeout solutions :
-    while true -> moveset_count < 81
     remove tous les vector ?
     Replace recursive BFS with iterative BFS (must do)
 
@@ -97,7 +96,7 @@ Beam search : Strategy explained below
 
 League: Silver (max)
 Begin at position : 146/1732
-Ending at position: -/-
+Ending at position: 103/1800
 
 # v3.1
 

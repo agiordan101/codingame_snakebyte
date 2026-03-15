@@ -5,7 +5,7 @@ BIN_FILE = ./bin/$(TARGET)
 
 # Compiler and flags
 CXX = g++-11
-CXXFLAGS = -Wall -Wextra -std=c++20 -lm -lpthread
+CXXFLAGS = -g -Wall -Wextra -std=c++20 -lm -lpthread
 
 # Main rule
 all: $(BIN_FILE)

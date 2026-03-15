@@ -34,6 +34,11 @@
 #include <unordered_set>
 #include <chrono>
 
+#include <csignal>
+#include <cstdlib>
+#include <execinfo.h> // For backtrace
+#include <unistd.h>   // For STDERR_FILENO
+
 using namespace std;
 
 using Pos = int; // 1 dimension coordinate in map (y * width + x)
@@ -1259,8 +1264,31 @@ void parse_turn_inputs(State &state)
     }
 }
 
+/* --- MAIN LOOP --- */
+
+void signal_handler(int signal) {
+    const char* signal_name = nullptr;
+    switch (signal) {
+        case SIGSEGV: signal_name = "SIGSEGV (Segmentation Fault)"; break;
+        case SIGABRT: signal_name = "SIGABRT (Abort)"; break;
+        case SIGFPE:  signal_name = "SIGFPE (Floating Point Exception)"; break;
+        default:      signal_name = "Unknown signal"; break;
+    }
+
+    // Print error message to stderr
+    std::cerr << "\n[ERROR] Caught signal: " << signal_name << " (" << signal << ")\n";
+
+    // Exit gracefully
+    exit(EXIT_FAILURE);
+}
+
 int main()
 {
+    // Register signal handlers
+    signal(SIGSEGV, signal_handler); // Segmentation fault
+    signal(SIGABRT, signal_handler); // Abort
+    signal(SIGFPE,  signal_handler);  // Floating point exception
+
     State initial_state;
     bzero(&initial_state, sizeof(initial_state));
     parse_initial_inputs(initial_state);
@@ -1285,8 +1313,6 @@ int main()
         MoveSet best_moveset;
         try
         {
-            // MoveSet turn_beginning_moveset = {};
-            // best_moveset = choose_player_moveset(state, map_properties.my_id, turn_beginning_moveset);
             best_moveset = beam_search(state, map_properties.my_id, 20, 150, 30000, start_turn_chrono);
         }
         catch (const std::exception &e)
