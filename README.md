@@ -3,8 +3,13 @@ Winter Challenge 2026
 
 ## TODO
 
-v4.3 timeout :
-    - Each turn ends with "Time limit exceeded during moveset generation.", except when their is a timeout ! With 65000/69000 ms. Logs look fine, and satte visited too.
+Debugging v4.3 timeout :
+    - (No more crash after testing with 30000ms) Just run out of time for weird reason. May regroup the following timeout behavior :
+        - Each turn ends with "Time limit exceeded during moveset generation.", except when there this timeout !
+        - With 65000/69000 ms. Logs look fine, and satte visited too.
+        - Crash during beam search - No segfault !
+        - Crash exciting beam search - No segfault ! Right after "beam_search_states logs"
+    - Just suicide: Run outside the map even if a energy cell is reachable (Maybe it just run randomly and it's too late when it realize it will fall)
 
 After publishing v4: Still rare crash - Happen on map edges, after an enemy snake fall
 
@@ -15,10 +20,20 @@ timeout solutions :
     Replace recursive BFS with iterative BFS (must do)
 
 - Tester d'autres heuristic :
+    - Utiliser des ranges/bases pour priorisé les objectif, example :
+        Game result : 100 * w
+        Game point : 10 * p
+        Energy dist: 1 * d
+        Closest ally snake: 0.1 * d
+        Head outside platform: 0.5
+        ...
     - Ajouter des bonus en fonction de ce qu'il y a autour du snake :
         - Platform: Bonus weighted par l'idex du PREMIER body qui est sur une platform (Encourage la tête à retrouver des platforms)
         - Snake allié: Pareil que pour les platforms, mais avec un bonus plus faible
         - Snake enemy: Pareil que pour les platforms, mais avec un malus
+    - Desactivate energy tracking when : game points diff > remaining energy
+    - Créer une map de distance entre les cases au dessus des platforms et les energies, avec BFS. les cases qui ne sont pas au dessus : -1
+        - Quand la case est plus haut que l'énergie : On prend que X (manhattan ducoup ?)
     - Avoir un BFS avec gravité qui determine si un snake peut ateindre une energy, sinon faire en sorte qu'il se raproche de la queue d'un allié
     - A faire après le beam search, pour correctement évaluer l'amélioration du ratio temps/précision de l'heuristic : Faire un nouveau DFS qui prends en compte la gravité et son body :
         On prends l'état actuel
@@ -30,6 +45,18 @@ timeout solutions :
   renvoyer une liste des snake qui collide dans handle_snake_collisions (donc avoir 1 seul state en param)
 - apply_moveset: Plutot que d'avoir un previous state, on pourrait juste remove_snake_in_cells_from_their_old_positions au tout début de la fonction ?
 . Ensuite remove head et kill les snake directement dans la même fonction 
+
+Algorithm optimisations :
+
+1. 
+    apply_move(state, move)
+    undo_move(state, move)
+    au lieu de memcpy
+
+2. bitboards ou compaction ou reduction de la taille de State
+
+
+
 
 POinters instead of state copy :
     Short-term minimal change: store pointers (or std::unique_ptr<State>) in your candidate list instead of copying whole State. Alternatively, only push the heuristic + MoveSet first_depth_moveset + a compact representation of the state (e.g., differences). The quickest patch is to store std::shared_ptr<State> or std::unique_ptr<State>.
@@ -142,13 +169,25 @@ MoveSet -> A list of Move
 
 ## History
 
+# v4.4 WIP
+
+Debug :
+    - Fix snake parsing out of padded cells bounds
+    - Initialize with default distance because some energy cells may be innaccessible
+State size reduction :
+    - Reduce PADDING from 10 to 2 and reduce size of Pos energies from MAX_CELL_COUNT to MAX_ENERGY_COUNT: From ~6500 to ~1750 integers (~ /4)
+
+League: Gold (max)
+First publication : -/1900
+Last publication: -/-
+
 # v4.3 (Bugged)
 
 Heuristic : During first turn: Create a lookup table to know for all cells which energies are the closest and their BFS distance (without snakes)
 
 League: Gold (max)
 First publication : 190/1839
-Last publication: 221/1867
+Last publication: 250/1900
 
 # v4.2 (Worst than v4)
 

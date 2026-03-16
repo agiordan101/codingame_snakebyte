@@ -1,4 +1,4 @@
-// Version 4.3
+// Version 4.3->4.4 (Debugging & Optimizing state)
 
 // Algorithms :
 // v1 - Each snakes go to closest Energy cell using BFS
@@ -21,6 +21,7 @@
 //   v4.4 - v4.3 but debugged
 //            - Fix snake parsing out of padded cells bounds
 //            - Initialize with default distance because some energy cells may be innaccessible
+//            - Reduce PADDING from 10 to 2 and reduce size of Pos energies from MAX_CELL_COUNT MAX_ENERGY_COUNT: From ~6500 to ~1750 integers (~ /4)
 
 #undef _GLIBCXX_DEBUG
 #pragma GCC optimize("Ofast,unroll-loops,omit-frame-pointer,inline")
@@ -56,7 +57,7 @@ using Pos = int; // 1 dimension coordinate in map (y * width + x)
 constexpr int MAX_MAP_WIDTH = 45;
 constexpr int MAX_MAP_HEIGHT = 30;
 
-constexpr int MAP_PADDING = 10;
+constexpr int MAP_PADDING = 2;
 constexpr int MAX_WIDTH = MAX_MAP_WIDTH + 2 * MAP_PADDING;
 constexpr int MAX_HEIGHT = MAX_MAP_HEIGHT + 2 * MAP_PADDING;
 constexpr int MAX_CELL_COUNT = MAX_WIDTH * MAX_HEIGHT;
@@ -213,7 +214,7 @@ struct State
     int alive_snake_count;
     int alive_snake_ids[MAX_SNAKE_COUNT];
 
-    Pos energies[MAX_CELL_COUNT];
+    Pos energies[MAX_ENERGY_COUNT];
     int energy_count;
 
     float heuristic;
