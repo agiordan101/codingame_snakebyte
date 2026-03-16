@@ -1,4 +1,4 @@
-// Version 4.3->4.4 (Debugging & Optimizing state)
+// Version 4.4
 
 // Algorithms :
 // v1 - Each snakes go to closest Energy cell using BFS

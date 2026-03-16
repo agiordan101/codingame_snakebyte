@@ -41,7 +41,7 @@ timeout solutions :
         en v1: On considère une seule fois les cases où la tête est passée
         en v1: On shift les pos du body ?
 - Collisions :
-  Plutot que d'avoir un state previous ou resolved et dying flag on ourrait :
+  Plutot que d'avoir un colliding_state et resolved_state ou resolved et dying flag on pourrait :
   renvoyer une liste des snake qui collide dans handle_snake_collisions (donc avoir 1 seul state en param)
 - apply_moveset: Plutot que d'avoir un previous state, on pourrait juste remove_snake_in_cells_from_their_old_positions au tout début de la fonction ?
 . Ensuite remove head et kill les snake directement dans la même fonction 
@@ -169,7 +169,16 @@ MoveSet -> A list of Move
 
 ## History
 
-# v4.4 WIP
+# v4.5
+
+- Remove time check each at state child/MoveSet: Now check once per beam state
+- Collision refacto: Remove memcpy in apply_moveset by storing colliding_snakes in an array and removing their head after
+
+League: Gold (max)
+First publication : 164/1926
+Last publication: -/-
+
+# v4.4
 
 Debug :
     - Fix snake parsing out of padded cells bounds
@@ -179,7 +188,7 @@ State size reduction :
 
 League: Gold (max)
 First publication : 164/1900
-Last publication: -/-
+Last publication: 169/1926
 
 # v4.3 (Bugged)
 

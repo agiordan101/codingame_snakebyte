@@ -1,4 +1,4 @@
-// Version 4.3->4.4 (Debugging & Optimizing state)
+// Version 4.6
 
 // Algorithms :
 // v1 - Each snakes go to closest Energy cell using BFS
@@ -22,6 +22,8 @@
 //            - Fix snake parsing out of padded cells bounds
 //            - Initialize with default distance because some energy cells may be innaccessible
 //            - Reduce PADDING from 10 to 2 and reduce size of Pos energies from MAX_CELL_COUNT MAX_ENERGY_COUNT: From ~6500 to ~1750 integers (~ /4)
+//  v4.5 - Remove time check each at state child/MoveSet: Now check once per beam state
+//          - Collision refacto: Remove memcpy in apply_moveset by storing colliding_snakes in an array and removing their head after
 
 #undef _GLIBCXX_DEBUG
 #pragma GCC optimize("Ofast,unroll-loops,omit-frame-pointer,inline")
@@ -593,13 +595,8 @@ void create_lookup_tables(State &state)
 
     auto end_lookup_creation_chrono = chrono::high_resolution_clock::now();
 
-    print_map_of_closest_energy_distances(state);
-    // print_bfs_distances_per_energy(state);
-    auto end_lookup_display_chrono = chrono::high_resolution_clock::now();
-
-    fprintf(stderr, "Lookup tables created in %d ms, displayed in %d ms\n",
-            (int)chrono::duration_cast<chrono::milliseconds>(end_lookup_creation_chrono - start_lookup_creation_chrono).count(),
-            (int)chrono::duration_cast<chrono::milliseconds>(end_lookup_display_chrono - end_lookup_creation_chrono).count());
+    fprintf(stderr, "Lookup tables created in %d ms\n",
+            (int)chrono::duration_cast<chrono::milliseconds>(end_lookup_creation_chrono - start_lookup_creation_chrono).count());
 }
 
 /* --- GAME PHYSICS - GENERATION --- */
@@ -808,22 +805,23 @@ void apply_all_moves(State &state, MoveSet &moveset)
     }
 }
 
-void handle_snake_collisions(State &colliding_state, State &resolved_state)
+int find_snake_collisions(State &state, Snake *colliding_snakes[MAX_SNAKE_COUNT])
 {
-    // fprintf(stderr, "handle_snake_collisions() ...\n");
+    // fprintf(stderr, "find_snake_collisions() ...\n");
+    int colliding_snake_count = 0;
 
-    for (int snake_index = 0; snake_index < get_alive_snake_count(colliding_state); snake_index++)
+    for (int snake_index = 0; snake_index < get_alive_snake_count(state); snake_index++)
     {
         // Iter over all alive snakes
-        int snake_id = get_alive_snake_id(colliding_state, snake_index);
-        Snake &snake = get_snake(colliding_state, snake_id);
+        int snake_id = get_alive_snake_id(state, snake_index);
+        Snake &snake = get_snake(state, snake_id);
         Pos snake_head_pos = get_snake_head_pos(snake);
 
-        for (int snake2_index = 0; snake2_index < get_alive_snake_count(colliding_state); snake2_index++)
+        for (int snake2_index = 0; snake2_index < get_alive_snake_count(state); snake2_index++)
         {
             // Iter over all other alive snakes
-            int snake2_id = get_alive_snake_id(colliding_state, snake2_index);
-            Snake &snake2 = get_snake(colliding_state, snake2_id);
+            int snake2_id = get_alive_snake_id(state, snake2_index);
+            Snake &snake2 = get_snake(state, snake2_id);
 
             // Check if snake head is colliding with snake2 body
             for (int body_idx = 0; body_idx < get_snake_body_length(snake2); body_idx++)
@@ -834,37 +832,29 @@ void handle_snake_collisions(State &colliding_state, State &resolved_state)
                 Pos snake2_body_pos = get_snake_body_pos(snake2, body_idx);
                 if (snake_head_pos == snake2_body_pos)
                 {
-                    // fprintf(stderr, "Snake %d is colliding with snake %d\n", snake_id, snake2_id);
-                    Snake &future_snake = get_snake(resolved_state, snake_id);
-
-                    if (get_snake_body_length(future_snake) - 1 < 3)
-                    {
-                        // fprintf(stderr, "Snake %d is dying\n", snake_id);
-                        // We can't remove it from alive snakes list now, so mark it dying for later
-                        set_snake_dying(future_snake);
-                    }
-                    else
-                    {
-                        remove_snake_head(future_snake);
-                        // print_snake(future_snake);
-                    }
+                    colliding_snakes[colliding_snake_count++] = &snake;
                 }
             }
         }
     }
+
+    return colliding_snake_count;
 }
 
-void kill_dying_snakes(State &state)
+void apply_snake_collisions(State &state, Snake *colliding_snakes[MAX_SNAKE_COUNT], int colliding_snake_count)
 {
-    // Iterate backwards because we're removing snakes by shifting the array right to left
-    // Iterate forward would skip the snake after the one we removed
-    for (int i = get_alive_snake_count(state) - 1; i >= 0; i--)
+    for (int i = 0; i < colliding_snake_count; i++)
     {
-        int snake_id = get_alive_snake_id(state, i);
-        Snake &snake = get_snake(state, snake_id);
+        Snake &snake = *colliding_snakes[i];
 
-        if (is_snake_dying(snake))
-            remove_snake_from_alive_snake_ids(state, snake_id, get_snake_player_id(snake));
+        if (get_snake_body_length(snake) - 1 < 3)
+        {
+            remove_snake_from_alive_snake_ids(state, get_snake_id(snake), get_snake_player_id(snake));
+        }
+        else
+        {
+            remove_snake_head(snake);
+        }
     }
 }
 
@@ -900,14 +890,13 @@ void set_snake_in_cells(State &state)
     }
 }
 
-void kill_snake_immediately(State &state, Snake &snake, int snake_body_length)
+void kill_snake_immediately(State &state, Snake &snake)
 {
     // If not, remove snake from state
-    for (int i = 0; i < snake_body_length; i++)
+    for (int i = 0; i < get_snake_body_length(snake); i++)
         set_cell(state, get_snake_body_pos(snake, i), CELL_EMPTY);
 
-    set_snake_dying(snake);
-    kill_dying_snakes(state);
+    remove_snake_from_alive_snake_ids(state, get_snake_id(snake), get_snake_player_id(snake));
 }
 
 bool apply_snake_gravity(State &state, Snake &snake)
@@ -928,7 +917,7 @@ bool apply_snake_gravity(State &state, Snake &snake)
             Pos pos = get_snake_body_pos(snake, i);
             if (is_south_cell_out_of_bounds(pos))
             {
-                kill_snake_immediately(state, snake, snake_body_length);
+                kill_snake_immediately(state, snake);
                 return true;
             }
         }
@@ -957,7 +946,7 @@ bool apply_snake_gravity(State &state, Snake &snake)
         // Do not add the snake in the cells
         if (min_y >= map_properties.height + MAP_PADDING)
         {
-            kill_snake_immediately(state, snake, snake_body_length);
+            kill_snake_immediately(state, snake);
             return true;
         }
 
@@ -1005,16 +994,13 @@ void apply_moveset(State &previous_state, State &state, MoveSet &moveset)
     // fprintf(stderr, "Applying moveset ...\n");
     apply_all_moves(state, moveset);
 
-    // To not corrupt data we need to keep the collisions intact in colliding_state, and apply the collisions in another state
-    State colliding_state;
-    memcpy(&colliding_state, &state, sizeof(State));
-
     // Reset snake positions if we find a collision & Find dying snakes
-    handle_snake_collisions(colliding_state, state);
+    Snake *colliding_snakes[MAX_SNAKE_COUNT];
+    int colliding_snake_count = find_snake_collisions(state, colliding_snakes);
 
     // Update cells with new snake positions (Removing dying snkaes from cells)
     remove_snake_in_cells_from_their_old_positions(previous_state, state);
-    kill_dying_snakes(state);
+    apply_snake_collisions(state, colliding_snakes, colliding_snake_count);
     set_snake_in_cells(state);
 
     apply_gravity(state);
@@ -1327,7 +1313,7 @@ void consider_state_to_be_candidate(State &state, MoveSet &last_moveset, std::ve
     }
 }
 
-void find_candidates_among_state_children(State &state, int player_id, std::vector<State> &beam_search_candidates, int beam_width, auto start_turn_chrono, int maximum_microseconds)
+void find_candidates_among_state_children(State &state, int player_id, std::vector<State> &beam_search_candidates, int beam_width)
 {
     MoveSet turn_beginning_moveset = {};
     set_moveset_move_count(turn_beginning_moveset, 0);
@@ -1349,9 +1335,6 @@ void find_candidates_among_state_children(State &state, int player_id, std::vect
         set_heuristic(next_state, heuristic);
 
         consider_state_to_be_candidate(next_state, ally_movesets[i], beam_search_candidates, beam_width);
-
-        if (has_exceeded_time_limit(start_turn_chrono, maximum_microseconds))
-            return;
     }
 }
 
@@ -1364,7 +1347,7 @@ MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam
     // TODO: use beam_search_states directly
     // Create and initialize the candidates list with the initial state children
     std::vector<State> beam_search_candidates;
-    find_candidates_among_state_children(initial_state, player_id, beam_search_candidates, beam_width, start_turn_chrono, maximum_microseconds);
+    find_candidates_among_state_children(initial_state, player_id, beam_search_candidates, beam_width);
 
     // Create and initialize the beam search states with the initial state children
     // We absolutely not want the initial_state in the beam search states, because it has no moveset to return
@@ -1392,7 +1375,7 @@ MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam
                 continue;
             }
 
-            find_candidates_among_state_children(state, player_id, beam_search_candidates, beam_width, start_turn_chrono, maximum_microseconds);
+            find_candidates_among_state_children(state, player_id, beam_search_candidates, beam_width);
 
             if (has_exceeded_time_limit(start_turn_chrono, maximum_microseconds))
             {
@@ -1582,6 +1565,12 @@ int main()
     State initial_state;
     bzero(&initial_state, sizeof(initial_state));
     parse_initial_inputs(initial_state);
+
+    // Log struct size
+    fprintf(stderr, "State size: %zu bytes\n", sizeof(State));
+    fprintf(stderr, "Snake size: %zu bytes\n", sizeof(Snake));
+    fprintf(stderr, "MoveSet size: %zu bytes\n", sizeof(MoveSet));
+    fprintf(stderr, "Move size: %zu bytes\n", sizeof(Move));
 
     // Save initial state for resetting cells each turn
     State state;
