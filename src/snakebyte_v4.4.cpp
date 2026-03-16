@@ -19,6 +19,8 @@
 //   v4.2 - Heuristic : Replace BFS by Manhattan distance
 //   v4.3 - Heuristic : During first turn: Create a lookup table to know for all cells which energies are the closest and their BFS distance (without snakes)
 //   v4.4 - v4.3 but debugged
+//            - Fix snake parsing out of padded cells bounds
+//            - Initialize with default distance because some energy cells may be innaccessible
 
 #undef _GLIBCXX_DEBUG
 #pragma GCC optimize("Ofast,unroll-loops,omit-frame-pointer,inline")
@@ -457,13 +459,14 @@ BFSDistanceToEnergy cells_to_energy_lookup_table[MAX_CELL_COUNT][MAX_ENERGY_COUN
 
 void create_bfs_cells_to_energy_distance_lookup_table(State &state)
 {
-    // Temporary per-energy BFS distances: dist_from_energy[ei][cell]
-    static int dist_from_energy[MAX_ENERGY_COUNT][MAX_CELL_COUNT];
-
     // BFS from each energy cell outward, blocking only platforms
     for (int ei = 0; ei < state.energy_count; ei++)
     {
         Pos energy_pos = state.energies[ei];
+
+        // Initialize with default distance because some energy cells may be innaccessible
+        for (int i = 0; i < MAX_CELL_COUNT; i++)
+            cells_to_energy_lookup_table[i][ei] = {MAX_WIDTH + MAX_HEIGHT, energy_pos};
 
         // Initialize BFS
         bool visited[MAX_CELL_COUNT] = {false};

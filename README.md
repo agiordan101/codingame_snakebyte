@@ -5,10 +5,6 @@ Winter Challenge 2026
 
 v4.3 timeout :
     - Each turn ends with "Time limit exceeded during moveset generation.", except when their is a timeout ! With 65000/69000 ms. Logs look fine, and satte visited too.
-    - Error: No energy cell found in lookup table for snake head at (23, 1) with 2 energy left: 7644973333309270000 , player "Qoo". Energy cells are inacessible !!!!!!
-    - [ERROR] Caught signal: SIGSEGV (Segmentation Fault) (11)
-        Un snake est probablement sortis de la map avec padding !!
-        Le beam search ne s'est même pas lancé ! Error dans le parsing ?
 
 After publishing v4: Still rare crash - Happen on map edges, after an enemy snake fall
 
