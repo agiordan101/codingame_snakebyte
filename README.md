@@ -146,7 +146,7 @@ MoveSet -> A list of Move
 
 ## History
 
-# v4.3
+# v4.3 (Bugged)
 
 Heuristic : During first turn: Create a lookup table to know for all cells which energies are the closest and their BFS distance (without snakes)
 

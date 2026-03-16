@@ -1157,7 +1157,7 @@ float evaluate_state(State &state, int player_id)
             if (get_cell(state, cells_to_energy_lookup_table[snake_head_pos][e].energy_pos) == CELL_ENERGY)
             {
                 dist_sum += cells_to_energy_lookup_table[snake_head_pos][e].distance;
-                break; // Only consider the closest energy cell distance                
+                break; // Only consider the closest energy cell distance
             }
             if (e == MAX_ENERGY_COUNT - 1)
             {
@@ -1464,16 +1464,8 @@ bool parse_pos_from_segment(string segment, Pos &pos)
     int x = stoi(segment.substr(0, commaPos));
     int y = stoi(segment.substr(commaPos + 1));
 
-    if (x < 0 || x >= map_properties.width || y < 0 || y >= map_properties.height)
-    {
-        fprintf(stderr, "Warning: Snake body position out of map in segment '%s' (x=%d, y=%d)\n", segment.c_str(), x, y);
-        if (x < -MAP_PADDING || x >= map_properties.width + MAP_PADDING || y < -MAP_PADDING || y >= map_properties.height + MAP_PADDING)
-        {
-            fprintf(stderr, "Error: Snake body position out of cell bounds in segment '%s' (x=%d, y=%d)\n", segment.c_str(), x, y);
-            exit(0);
-            return false;
-        }
-    }
+    if (x < -MAP_PADDING || x >= map_properties.width + MAP_PADDING || y < -MAP_PADDING || y >= map_properties.height + MAP_PADDING)
+        return false;
 
     // Convert map coordinates to internal data structure coordinates
     pos = get_pos_from_map_coord(x, y);
