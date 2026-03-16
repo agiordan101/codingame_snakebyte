@@ -178,7 +178,7 @@ State size reduction :
     - Reduce PADDING from 10 to 2 and reduce size of Pos energies from MAX_CELL_COUNT to MAX_ENERGY_COUNT: From ~6500 to ~1750 integers (~ /4)
 
 League: Gold (max)
-First publication : -/1900
+First publication : 164/1900
 Last publication: -/-
 
 # v4.3 (Bugged)
@@ -211,7 +211,7 @@ Beam search : Strategy explained below
 
 League: Silver (max)
 First publication : 146/1732
-Last publication: 210/1867
+Last publication: 210/1900
 
 # v3.1
 
