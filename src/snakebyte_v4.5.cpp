@@ -103,7 +103,6 @@ struct Snake
     int player_id;
     Pos body_pos[MAX_SNAKE_SIZE];
     int body_length;
-    bool is_dying;
 };
 
 int get_snake_id(Snake &snake) { return snake.id; }
@@ -114,14 +113,6 @@ int get_snake_body_length(Snake &snake) { return snake.body_length; }
 
 void set_snake_body_pos(Snake &snake, int index, Pos pos) { snake.body_pos[index] = pos; }
 void set_snake_body_length(Snake &snake, int length) { snake.body_length = length; }
-void set_snake_dying(Snake &snake) { snake.is_dying = true; }
-
-bool is_snake_dying(Snake &snake) { return snake.is_dying; }
-
-void reset_snake_state(Snake &snake)
-{
-    snake.is_dying = false;
-}
 
 void add_body_pos(Snake &snake, Pos pos)
 {
@@ -143,7 +134,6 @@ void initialize_snake_data(
     snake.player_id = player_id;
     bzero(snake.body_pos, sizeof(Pos) * MAX_SNAKE_SIZE);
     snake.body_length = 3;
-    snake.is_dying = false;
 }
 
 void print_snake(Snake &snake)
@@ -751,46 +741,28 @@ MoveSet merge_movesets(MoveSet &moveset1, MoveSet &moveset2)
 void apply_move(State &state, Snake &snake, Move &move)
 {
     // fprintf(stderr, "Applying move for snake %d: (%d, %d)\n", get_snake_id(snake), get_map_x(get_move_dst_pos(move)), get_map_y(get_move_dst_pos(move)));
-
     Pos new_head_pos = get_move_dst_pos(move);
-    int cell_at_new_head_pos = get_cell(state, new_head_pos);
+    int body_length_to_move = get_snake_body_length(snake) - 1;
 
-    if (cell_at_new_head_pos == CELL_PLATFORM)
+    // Grow when eating energy
+    if (get_cell(state, new_head_pos) == CELL_ENERGY)
     {
-        // Decrease snake length
-        set_snake_body_length(snake, get_snake_body_length(snake) - 1);
+        // Remove the energy cell (even if two snakes will collide on it)
+        set_cell(state, new_head_pos, CELL_EMPTY);
+        remove_energy(state, new_head_pos);
 
-        // Body positions remain the same
-        if (get_snake_body_length(snake) < 3)
-        {
-            // fprintf(stderr, "Snake %d is dying from platform collision !\n");
-            // We can't remove it from alive snakes list now, so mark it dying for later
-            set_snake_dying(snake);
-        }
+        // Move the whole body positions, instead of loosing the tail position
+        body_length_to_move = get_snake_body_length(snake);
+
+        // Increase snake length
+        set_snake_body_length(snake, get_snake_body_length(snake) + 1);
     }
-    else
-    {
-        int body_length_to_move = get_snake_body_length(snake) - 1;
 
-        if (cell_at_new_head_pos == CELL_ENERGY)
-        {
-            // Remove the energy cell (even if two snakes will collide on it)
-            set_cell(state, new_head_pos, CELL_EMPTY);
-            remove_energy(state, new_head_pos);
+    // Move the body positions (memmove because source and dest overlap)
+    memmove(&snake.body_pos[1], &snake.body_pos[0], sizeof(Pos) * body_length_to_move);
 
-            // Move the whole body positions, instead of loosing the tail position
-            body_length_to_move = get_snake_body_length(snake);
-
-            // Increase snake length
-            set_snake_body_length(snake, get_snake_body_length(snake) + 1);
-        }
-
-        // Move the body positions (memmove because source and dest overlap)
-        memmove(&snake.body_pos[1], &snake.body_pos[0], sizeof(Pos) * body_length_to_move);
-
-        // Assign a new position to the head
-        set_snake_body_pos(snake, 0, new_head_pos);
-    }
+    // Assign a new position to the head
+    set_snake_body_pos(snake, 0, new_head_pos);
 }
 
 void apply_all_moves(State &state, MoveSet &moveset)
@@ -800,7 +772,6 @@ void apply_all_moves(State &state, MoveSet &moveset)
         Move &move = get_moveset_move(moveset, i);
         Snake &snake = get_snake(state, get_move_snake_id(move));
 
-        reset_snake_state(snake); // useless
         apply_move(state, snake, move);
     }
 }
@@ -816,6 +787,14 @@ int find_snake_collisions(State &state, Snake *colliding_snakes[MAX_SNAKE_COUNT]
         int snake_id = get_alive_snake_id(state, snake_index);
         Snake &snake = get_snake(state, snake_id);
         Pos snake_head_pos = get_snake_head_pos(snake);
+
+        int head_cell = get_cell(state, snake_head_pos);
+
+        if (head_cell == CELL_PLATFORM)
+        {
+            colliding_snakes[colliding_snake_count++] = &snake;
+            continue;
+        }
 
         for (int snake2_index = 0; snake2_index < get_alive_snake_count(state); snake2_index++)
         {
@@ -1611,20 +1590,6 @@ int main()
             fprintf(stderr, "My Alive Snakes: %d\n", get_player_alive_snake_count(state, map_properties.my_id));
             fprintf(stderr, "Opponent Alive Snakes: %d\n", get_player_alive_snake_count(state, map_properties.opp_id));
             fprintf(stderr, "Total Alive Snakes: %d\n", get_alive_snake_count(state));
-            fprintf(stderr, "\n--- MY SNAKES DETAIL ---\n");
-            for (int i = 0; i < get_player_alive_snake_count(state, map_properties.my_id); i++)
-            {
-                int snake_id = get_player_alive_snake_id(state, map_properties.my_id, i);
-                Snake &snake = get_snake(state, snake_id);
-                fprintf(stderr, "  Snake %d: length=%d, dying=%d\n", snake_id, get_snake_body_length(snake), is_snake_dying(snake));
-            }
-            fprintf(stderr, "\n--- OPPONENT SNAKES DETAIL ---\n");
-            for (int i = 0; i < get_player_alive_snake_count(state, map_properties.opp_id); i++)
-            {
-                int snake_id = get_player_alive_snake_id(state, map_properties.opp_id, i);
-                Snake &snake = get_snake(state, snake_id);
-                fprintf(stderr, "  Snake %d: length=%d, dying=%d\n", snake_id, get_snake_body_length(snake), is_snake_dying(snake));
-            }
             fprintf(stderr, "===========================================\n\n");
             exit(1);
         }
