@@ -172,10 +172,12 @@ MoveSet -> A list of Move
 # v4.5
 
 - Remove time check each at state child/MoveSet: Now check once per beam state
-- Collision refacto: Remove memcpy in apply_moveset by storing colliding_snakes in an array and removing their head after
+- Snake collision refacto: Remove memcpy in apply_moveset by storing colliding_snakes in an array and removing their head after
+- Platform collision refacto: Handle them at the same time than snake collisions
+- Energy eating refacto: Remove energies later so multiple snakes can eat the same energy in the same turn
 
 League: Gold (max)
-First publication : 164/1926
+First publication : 120/1926
 Last publication: -/-
 
 # v4.4

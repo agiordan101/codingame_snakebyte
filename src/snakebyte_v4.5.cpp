@@ -23,7 +23,9 @@
 //            - Initialize with default distance because some energy cells may be innaccessible
 //            - Reduce PADDING from 10 to 2 and reduce size of Pos energies from MAX_CELL_COUNT MAX_ENERGY_COUNT: From ~6500 to ~1750 integers (~ /4)
 //  v4.5 - Remove time check each at state child/MoveSet: Now check once per beam state
-//          - Collision refacto: Remove memcpy in apply_moveset by storing colliding_snakes in an array and removing their head after
+//          - Snake collision refacto: Remove memcpy in apply_moveset by storing colliding_snakes in an array and removing their head after
+//          - Platform collision refacto: Handle them at the same time than snake collisions
+//          - Energy eating refacto: Remove energies later so multiple snakes can eat the same energy in the same turn
 
 #undef _GLIBCXX_DEBUG
 #pragma GCC optimize("Ofast,unroll-loops,omit-frame-pointer,inline")
@@ -738,7 +740,7 @@ MoveSet merge_movesets(MoveSet &moveset1, MoveSet &moveset2)
     return merged_moveset;
 }
 
-void apply_move(State &state, Snake &snake, Move &move)
+void apply_move(State &state, Snake &snake, Move &move, Pos eaten_energies[MAX_SNAKE_COUNT], int *eaten_energy_count)
 {
     // fprintf(stderr, "Applying move for snake %d: (%d, %d)\n", get_snake_id(snake), get_map_x(get_move_dst_pos(move)), get_map_y(get_move_dst_pos(move)));
     Pos new_head_pos = get_move_dst_pos(move);
@@ -748,8 +750,7 @@ void apply_move(State &state, Snake &snake, Move &move)
     if (get_cell(state, new_head_pos) == CELL_ENERGY)
     {
         // Remove the energy cell (even if two snakes will collide on it)
-        set_cell(state, new_head_pos, CELL_EMPTY);
-        remove_energy(state, new_head_pos);
+        eaten_energies[(*eaten_energy_count)++] = new_head_pos;
 
         // Move the whole body positions, instead of loosing the tail position
         body_length_to_move = get_snake_body_length(snake);
@@ -765,14 +766,23 @@ void apply_move(State &state, Snake &snake, Move &move)
     set_snake_body_pos(snake, 0, new_head_pos);
 }
 
-void apply_all_moves(State &state, MoveSet &moveset)
+void apply_all_moves(State &state, MoveSet &moveset, Pos eaten_energies[MAX_SNAKE_COUNT], int *eaten_energy_count)
 {
     for (int i = 0; i < get_moveset_move_count(moveset); i++)
     {
         Move &move = get_moveset_move(moveset, i);
         Snake &snake = get_snake(state, get_move_snake_id(move));
 
-        apply_move(state, snake, move);
+        apply_move(state, snake, move, eaten_energies, eaten_energy_count);
+    }
+}
+
+void remove_eaten_energies(State &state, Pos eaten_energies[MAX_SNAKE_COUNT], int eaten_energy_count)
+{
+    for (int i = 0; i < eaten_energy_count; i++)
+    {
+        set_cell(state, eaten_energies[i], CELL_EMPTY);
+        remove_energy(state, eaten_energies[i]);
     }
 }
 
@@ -971,7 +981,11 @@ void apply_moveset(State &previous_state, State &state, MoveSet &moveset)
     set_turn(state, previous_turn + 1);
 
     // fprintf(stderr, "Applying moveset ...\n");
-    apply_all_moves(state, moveset);
+    Pos eaten_energies[MAX_SNAKE_COUNT];
+    int eaten_energies_count = 0;
+    apply_all_moves(state, moveset, eaten_energies, &eaten_energies_count);
+
+    remove_eaten_energies(state, eaten_energies, eaten_energies_count);
 
     // Reset snake positions if we find a collision & Find dying snakes
     Snake *colliding_snakes[MAX_SNAKE_COUNT];
