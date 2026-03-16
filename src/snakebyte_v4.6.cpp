@@ -1,4 +1,4 @@
-// Version 4.5
+// Version 4.6
 
 // Algorithms :
 // v1 - Each snakes go to closest Energy cell using BFS
@@ -26,6 +26,8 @@
 //          - Snake collision refacto: Remove memcpy in apply_moveset by storing colliding_snakes in an array and removing their head after
 //          - Platform collision refacto: Handle them at the same time than snake collisions
 //          - Energy eating refacto: Remove energies later so multiple snakes can eat the same energy in the same turn
+//  v4.6 - Simplify apply_moveset: Optimize snake mouvements in cells (Don't remove and reapply each turns)
+//          - Add early return when collision are detected
 
 #undef _GLIBCXX_DEBUG
 #pragma GCC optimize("Ofast,unroll-loops,omit-frame-pointer,inline")
@@ -758,6 +760,12 @@ void apply_move(State &state, Snake &snake, Move &move, Pos eaten_energies[MAX_S
         // Increase snake length
         set_snake_body_length(snake, get_snake_body_length(snake) + 1);
     }
+    else
+    {
+        // We always remove the tail except when eating energy
+        Pos tail_pos = get_snake_body_pos(snake, get_snake_body_length(snake) - 1);
+        set_cell(state, tail_pos, CELL_EMPTY);
+    }
 
     // Move the body positions (memmove because source and dest overlap)
     memmove(&snake.body_pos[1], &snake.body_pos[0], sizeof(Pos) * body_length_to_move);
@@ -773,6 +781,7 @@ void apply_all_moves(State &state, MoveSet &moveset, Pos eaten_energies[MAX_SNAK
         Move &move = get_moveset_move(moveset, i);
         Snake &snake = get_snake(state, get_move_snake_id(move));
 
+        // Move snake body & Increase length when eating & Remove tail in cells if not eating
         apply_move(state, snake, move, eaten_energies, eaten_energy_count);
     }
 }
@@ -788,32 +797,34 @@ void remove_eaten_energies(State &state, Pos eaten_energies[MAX_SNAKE_COUNT], in
 
 int find_snake_collisions(State &state, Snake *colliding_snakes[MAX_SNAKE_COUNT])
 {
-    // fprintf(stderr, "find_snake_collisions() ...\n");
+    // Find collision & Set new snake pos in cells if not
     int colliding_snake_count = 0;
 
     for (int snake_index = 0; snake_index < get_alive_snake_count(state); snake_index++)
     {
         // Iter over all alive snakes
+        bool collide = false;
         int snake_id = get_alive_snake_id(state, snake_index);
         Snake &snake = get_snake(state, snake_id);
         Pos snake_head_pos = get_snake_head_pos(snake);
 
         int head_cell = get_cell(state, snake_head_pos);
-
         if (head_cell == CELL_PLATFORM)
         {
             colliding_snakes[colliding_snake_count++] = &snake;
+
+            // No need to check if it collide with a snake & Its head remain at the same position
             continue;
         }
 
-        for (int snake2_index = 0; snake2_index < get_alive_snake_count(state); snake2_index++)
+        for (int snake2_index = 0; snake2_index < get_alive_snake_count(state) && !collide; snake2_index++)
         {
             // Iter over all other alive snakes
             int snake2_id = get_alive_snake_id(state, snake2_index);
             Snake &snake2 = get_snake(state, snake2_id);
 
             // Check if snake head is colliding with snake2 body
-            for (int body_idx = 0; body_idx < get_snake_body_length(snake2); body_idx++)
+            for (int body_idx = 0; body_idx < get_snake_body_length(snake2) && !collide; body_idx++)
             {
                 if (snake_index == snake2_index && body_idx == 0)
                     continue; // Don't check collision with its own head
@@ -822,9 +833,16 @@ int find_snake_collisions(State &state, Snake *colliding_snakes[MAX_SNAKE_COUNT]
                 if (snake_head_pos == snake2_body_pos)
                 {
                     colliding_snakes[colliding_snake_count++] = &snake;
+
+                    // No need to check if it collide with another snake body & Its head remain at the same position
+                    collide = true;
                 }
             }
         }
+
+        // Snake head has always a new position, except when colliding with platform or snakes
+        if (!collide)
+            set_cell(state, snake_head_pos, snake_id);
     }
 
     return colliding_snake_count;
@@ -843,38 +861,6 @@ void apply_snake_collisions(State &state, Snake *colliding_snakes[MAX_SNAKE_COUN
         else
         {
             remove_snake_head(snake);
-        }
-    }
-}
-
-void remove_snake_in_cells_from_their_old_positions(State &previous_state, State &state)
-{
-    // State cells must be the same as previous state cells
-    // But snake spositions are differents, so we use the previous state snakes to remove snkaes from actual state cells
-    for (int i = 0; i < get_alive_snake_count(previous_state); i++)
-    {
-        int snake_id = get_alive_snake_id(previous_state, i);
-        Snake &snake = get_snake(previous_state, snake_id);
-
-        for (int j = 0; j < get_snake_body_length(snake); j++)
-        {
-            Pos body_pos = get_snake_body_pos(snake, j);
-            set_cell(state, body_pos, CELL_EMPTY);
-        }
-    }
-}
-
-void set_snake_in_cells(State &state)
-{
-    for (int i = 0; i < get_alive_snake_count(state); i++)
-    {
-        int snake_id = get_alive_snake_id(state, i);
-        Snake &snake = get_snake(state, snake_id);
-
-        for (int j = 0; j < get_snake_body_length(snake); j++)
-        {
-            Pos body_pos = get_snake_body_pos(snake, j);
-            set_cell(state, body_pos, snake_id);
         }
     }
 }
@@ -980,21 +966,18 @@ void apply_moveset(State &previous_state, State &state, MoveSet &moveset)
     int previous_turn = get_turn(previous_state);
     set_turn(state, previous_turn + 1);
 
-    // fprintf(stderr, "Applying moveset ...\n");
     Pos eaten_energies[MAX_SNAKE_COUNT];
     int eaten_energies_count = 0;
     apply_all_moves(state, moveset, eaten_energies, &eaten_energies_count);
 
     remove_eaten_energies(state, eaten_energies, eaten_energies_count);
 
-    // Reset snake positions if we find a collision & Find dying snakes
+    // Find collision & Set new snake pos in cells if not
     Snake *colliding_snakes[MAX_SNAKE_COUNT];
     int colliding_snake_count = find_snake_collisions(state, colliding_snakes);
-
-    // Update cells with new snake positions (Removing dying snkaes from cells)
-    remove_snake_in_cells_from_their_old_positions(previous_state, state);
+    
+    // Reset snake positions if we found a collision & Kill snakes if needed
     apply_snake_collisions(state, colliding_snakes, colliding_snake_count);
-    set_snake_in_cells(state);
 
     apply_gravity(state);
     update_game_points(state);
@@ -1588,7 +1571,7 @@ int main()
         MoveSet best_moveset;
         try
         {
-            best_moveset = beam_search(state, map_properties.my_id, 20, 150, 30000, start_turn_chrono);
+            best_moveset = beam_search(state, map_properties.my_id, 50, 150, 30000, start_turn_chrono);
             beam_search_execution_count++;
             beam_search_sum_states_visited += beam_search_visited_states_count;
             beam_search_average_states_visited = beam_search_sum_states_visited / (float)beam_search_execution_count;

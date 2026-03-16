@@ -1,23 +1,55 @@
 # codingame_snakebyte
 Winter Challenge 2026
 
+## Run commands
+
+To compete 2 bots (100 silver games with 4 threads) :
+
+```bash
+make && \
+cg-colosseum battle \
+    --preset winter2026 -d league=4 -n 100 -t 4 \
+    --p1 ./bin/snakebyte_v4 \
+    --p2 ./bin/snakebyte_v4
+```
+
+To analyze a specific game :
+
+```bash
+make && \
+cg-colosseum replay \
+    --preset winter2026 -d league=4 \
+    --p1 "./bin/snakebyte_v4" \
+    --p2 ./bin/snakebyte_v4 \
+    --seed=-7137723507467264000 \
+    --view
+```
+
+To analyze time consumption (Generate file callgrind.out.*) :
+
+```bash
+make && \
+cg-colosseum battle \
+    --preset winter2026 -d league=4 -n 1 -t 1 \
+    --p1 "valgrind --tool=callgrind ./bin/snakebyte_v4" \
+    --p2 ./bin/snakebyte_4
+```
+
+For debug memory issues (Generate file valgrind.log) :
+
+```bash
+make && \
+cg-colosseum battle \
+    --preset winter2026 -d league=4 -n 1 -t 1 \
+    --p1 "valgrind -s --leak-check=full --track-origins=yes --log-file=valgrind.log ./bin/snakebyte_v4" \
+    --p2 ./bin/snakebyte_v4
+```
+
 ## TODO
 
-Debugging v4.3 timeout :
-    - (No more crash after testing with 30000ms) Just run out of time for weird reason. May regroup the following timeout behavior :
-        - Each turn ends with "Time limit exceeded during moveset generation.", except when there this timeout !
-        - With 65000/69000 ms. Logs look fine, and satte visited too.
-        - Crash during beam search - No segfault !
-        - Crash exciting beam search - No segfault ! Right after "beam_search_states logs"
-    - Just suicide: Run outside the map even if a energy cell is reachable (Maybe it just run randomly and it's too late when it realize it will fall)
-
-After publishing v4: Still rare crash - Happen on map edges, after an enemy snake fall
+Les wins devrait valoir toute autant de points, weighted par le turn de la win (plus on gagne tôt, mieux c'est). Sinon ils partent au combat ces malades
 
 Lorsqu'on pert avec plus d'energy, il vaut mieux perdre que se prendre des murs en boucle (plus dexagération de la lose)
-
-timeout solutions :
-    remove tous les vector ?
-    Replace recursive BFS with iterative BFS (must do)
 
 - Tester d'autres heuristic :
     - Utiliser des ranges/bases pour priorisé les objectif, example :
@@ -34,6 +66,7 @@ timeout solutions :
     - Desactivate energy tracking when : game points diff > remaining energy
     - Créer une map de distance entre les cases au dessus des platforms et les energies, avec BFS. les cases qui ne sont pas au dessus : -1
         - Quand la case est plus haut que l'énergie : On prend que X (manhattan ducoup ?)
+    - Tester de remettre un vrai BFS realtime dans l'heuristic
     - Avoir un BFS avec gravité qui determine si un snake peut ateindre une energy, sinon faire en sorte qu'il se raproche de la queue d'un allié
     - A faire après le beam search, pour correctement évaluer l'amélioration du ratio temps/précision de l'heuristic : Faire un nouveau DFS qui prends en compte la gravité et son body :
         On prends l'état actuel
@@ -41,10 +74,7 @@ timeout solutions :
         en v1: On considère une seule fois les cases où la tête est passée
         en v1: On shift les pos du body ?
 - Collisions :
-  Plutot que d'avoir un colliding_state et resolved_state ou resolved et dying flag on pourrait :
-  renvoyer une liste des snake qui collide dans handle_snake_collisions (donc avoir 1 seul state en param)
-- apply_moveset: Plutot que d'avoir un previous state, on pourrait juste remove_snake_in_cells_from_their_old_positions au tout début de la fonction ?
-. Ensuite remove head et kill les snake directement dans la même fonction 
+- apply_moveset: Plutot que d'avoir un previous state, on pourrait juste remove_snake_in_cells_from_their_old_positions au tout début de la fonction ? 
 
 Algorithm optimisations :
 
@@ -63,50 +93,6 @@ POinters instead of state copy :
 
 Faster sorting :
     After generating all children for this depth (or after generating all children for a parent), if beam_search_candidates.size() > beam_width, call std::nth_element/std::partial_sort to keep only top beam_width by heuristic, then resize vector.
-
-## Run commands
-
-To compete 2 bots (100 silver games with 4 threads) :
-
-```bash
-make && \
-cg-colosseum battle \
-    --preset winter2026 -d league=2 -n 100 -t 4 \
-    --p1 ./bin/snakebyte_v4 \
-    --p2 ./bin/snakebyte_v4
-```
-
-To analyze a specific game :
-
-```bash
-make && \
-cg-colosseum replay \
-    --preset winter2026 -d league=2 \
-    --p1 "./bin/snakebyte_v4" \
-    --p2 ./bin/snakebyte_v4 \
-    --seed=-7137723507467264000 \
-    --view
-```
-
-To analyze time consumption (Generate file callgrind.out.*) :
-
-```bash
-make && \
-cg-colosseum battle \
-    --preset winter2026 -d league=2 -n 1 -t 1 \
-    --p1 "valgrind --tool=callgrind ./bin/snakebyte_v4" \
-    --p2 ./bin/snakebyte_4
-```
-
-For debug memory issues (Generate file valgrind.log) :
-
-```bash
-make && \
-cg-colosseum battle \
-    --preset winter2026 -d league=2 -n 1 -t 1 \
-    --p1 "valgrind -s --leak-check=full --track-origins=yes --log-file=valgrind.log ./bin/snakebyte_v4" \
-    --p2 ./bin/snakebyte_v4
-```
 
 ## Strategies
 
@@ -169,6 +155,15 @@ MoveSet -> A list of Move
 
 ## History
 
+# v4.6
+
+- Simplify apply_moveset: Optimize snake mouvements in cells (Don't remove and reapply each turns)
+- Add early return when collision are detected
+
+League: Gold (max)
+First publication : 110/1926
+Last publication: -
+
 # v4.5
 
 - Remove time check each at state child/MoveSet: Now check once per beam state
@@ -177,8 +172,8 @@ MoveSet -> A list of Move
 - Energy eating refacto: Remove energies later so multiple snakes can eat the same energy in the same turn
 
 League: Gold (max)
-First publication : 120/1926
-Last publication: -/-
+First publication : 110/1926
+Last publication: 110/1926
 
 # v4.4
 
