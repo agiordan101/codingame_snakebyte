@@ -6,17 +6,23 @@ Winter Challenge 2026
 v4.3 timeout :
     - Each turn ends with "Time limit exceeded during moveset generation.", except when their is a timeout ! With 65000/69000 ms. Logs look fine, and satte visited too.
     - Error: No energy cell found in lookup table for snake head at (23, 1) with 2 energy left: 7644973333309270000 , player "Qoo". Energy cells are inacessible !!!!!!
-
+    - [ERROR] Caught signal: SIGSEGV (Segmentation Fault) (11)
+        Un snake est probablement sortis de la map avec padding !!
+        Le beam search ne s'est même pas lancé ! Error dans le parsing ?
 
 After publishing v4: Still rare crash - Happen on map edges, after an enemy snake fall
+
+Lorsqu'on pert avec plus d'energy, il vaut mieux perdre que se prendre des murs en boucle (plus dexagération de la lose)
 
 timeout solutions :
     remove tous les vector ?
     Replace recursive BFS with iterative BFS (must do)
 
 - Tester d'autres heuristic :
-    - Manhattan à la place de BFS
-    - Générer une map de BFS au premier tour !?
+    - Ajouter des bonus en fonction de ce qu'il y a autour du snake :
+        - Platform: Bonus weighted par l'idex du PREMIER body qui est sur une platform (Encourage la tête à retrouver des platforms)
+        - Snake allié: Pareil que pour les platforms, mais avec un bonus plus faible
+        - Snake enemy: Pareil que pour les platforms, mais avec un malus
     - Avoir un BFS avec gravité qui determine si un snake peut ateindre une energy, sinon faire en sorte qu'il se raproche de la queue d'un allié
     - A faire après le beam search, pour correctement évaluer l'amélioration du ratio temps/précision de l'heuristic : Faire un nouveau DFS qui prends en compte la gravité et son body :
         On prends l'état actuel
@@ -144,33 +150,33 @@ MoveSet -> A list of Move
 
 Heuristic : During first turn: Create a lookup table to know for all cells which energies are the closest and their BFS distance (without snakes)
 
-League: Silver (max)
-Begin at position : 190/1839
-Ending at position: -/1800
+League: Gold (max)
+First publication : 190/1839
+Last publication: 221/1867
 
 # v4.2 (Worst than v4)
 
 Heuristic : Replace BFS by Manhattan distance
 
 League: Silver (max)
-Begin at position : 230/1800
-Ending at position: 230/1839
+First publication : 230/1800
+Last publication: 230/1839
 
 # v4.1 (Worst than v4)
 
 For depth > 1, stop simulating the opponent by choosing among all move combinaisons, but choose best snake move one by one (using previous snake moves).
 
 League: Silver (max)
-Begin at position : 320/1800
-Ending at position: 300/1800
+First publication : 320/1800
+Last publication: 300/1800
 
 # v4
 
 Beam search : Strategy explained below
 
 League: Silver (max)
-Begin at position : 146/1732
-Ending at position: 103/1800
+First publication : 146/1732
+Last publication: 210/1867
 
 # v3.1
 
@@ -181,32 +187,32 @@ Ending at position: 103/1800
 + Snake weren't checking collisions with their own body
 
 League: Silver (max)
-Begin at position : 155/1580
-Ending at position: 235/1730
+First publication : 155/1580
+Last publication: 235/1730
 
 # v2.1 = v3 (lot of bugs)
 
 Find opponent moveset with same algorithm before considering mine
 
 League: Silver (max)
-Begin at position : 330/1450
-Ending at position: 485/1563
+First publication : 330/1450
+Last publication: 485/1563
 
 # v2
 
 Evaluate all possible move combinaisons at current depth, using physics simulation (gravity + collisions) and an improved fitness function (Score diff + sum (Snake closest energy distance))
 
 League: Silver (max)
-Begin at position : 330/1450
-Ending at position: 364/1450
+First publication : 330/1450
+Last publication: 364/1450
 
 # v1.3
 
 + Add padding around map so all simulations work outside the map (BFS, etc...)
 
 League: Silver (max)
-Begin at position : 192/1206
-Ending at position: 317/1450
+First publication : 192/1206
+Last publication: 317/1450
 
 # v1.2
 

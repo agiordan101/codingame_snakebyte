@@ -18,6 +18,7 @@
 //              For 4 snakes, we're not simulating 3^4=81 movesets but 3*4=12 movesets.
 //   v4.2 - Heuristic : Replace BFS by Manhattan distance
 //   v4.3 - Heuristic : During first turn: Create a lookup table to know for all cells which energies are the closest and their BFS distance (without snakes)
+//   v4.4 - v4.3 but debugged
 
 #undef _GLIBCXX_DEBUG
 #pragma GCC optimize("Ofast,unroll-loops,omit-frame-pointer,inline")
@@ -1457,14 +1458,26 @@ void parse_initial_inputs(State &state)
     }
 }
 
-Pos parse_pos_from_segment(string segment)
+bool parse_pos_from_segment(string segment, Pos &pos)
 {
     size_t commaPos = segment.find(',');
     int x = stoi(segment.substr(0, commaPos));
     int y = stoi(segment.substr(commaPos + 1));
 
+    if (x < 0 || x >= map_properties.width || y < 0 || y >= map_properties.height)
+    {
+        fprintf(stderr, "Warning: Snake body position out of map in segment '%s' (x=%d, y=%d)\n", segment.c_str(), x, y);
+        if (x < -MAP_PADDING || x >= map_properties.width + MAP_PADDING || y < -MAP_PADDING || y >= map_properties.height + MAP_PADDING)
+        {
+            fprintf(stderr, "Error: Snake body position out of cell bounds in segment '%s' (x=%d, y=%d)\n", segment.c_str(), x, y);
+            exit(0);
+            return false;
+        }
+    }
+
     // Convert map coordinates to internal data structure coordinates
-    return get_pos_from_map_coord(x, y);
+    pos = get_pos_from_map_coord(x, y);
+    return true;
 }
 
 void parse_snakebot(State &state, Snake &snake, int snakebotId, string bodyStr)
@@ -1479,9 +1492,12 @@ void parse_snakebot(State &state, Snake &snake, int snakebotId, string bodyStr)
     {
         string segment = bodyStr.substr(start, end - start);
 
-        Pos body_pos = parse_pos_from_segment(segment);
-        add_body_pos(snake, body_pos);
-        set_cell(state, body_pos, snakebotId);
+        Pos body_pos;
+        if (parse_pos_from_segment(segment, body_pos))
+        {
+            add_body_pos(snake, body_pos);
+            set_cell(state, body_pos, snakebotId);
+        }
 
         start = end + 1;
         end = bodyStr.find(':', start);
@@ -1489,9 +1505,12 @@ void parse_snakebot(State &state, Snake &snake, int snakebotId, string bodyStr)
 
     // Add the last segment
     string lastSegment = bodyStr.substr(start);
-    Pos body_pos = parse_pos_from_segment(lastSegment);
-    add_body_pos(snake, body_pos);
-    set_cell(state, body_pos, snakebotId);
+    Pos body_pos;
+    if (parse_pos_from_segment(lastSegment, body_pos))
+    {
+        add_body_pos(snake, body_pos);
+        set_cell(state, body_pos, snakebotId);
+    }
 }
 
 void parse_turn_inputs(State &state)
