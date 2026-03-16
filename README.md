@@ -3,6 +3,11 @@ Winter Challenge 2026
 
 ## TODO
 
+v4.3 timeout :
+    - Each turn ends with "Time limit exceeded during moveset generation.", except when their is a timeout ! With 65000/69000 ms. Logs look fine, and satte visited too.
+    - Error: No energy cell found in lookup table for snake head at (23, 1) with 2 energy left: 7644973333309270000 , player "Qoo". Energy cells are inacessible !!!!!!
+
+
 After publishing v4: Still rare crash - Happen on map edges, after an enemy snake fall
 
 timeout solutions :
@@ -140,8 +145,8 @@ MoveSet -> A list of Move
 Heuristic : During first turn: Create a lookup table to know for all cells which energies are the closest and their BFS distance (without snakes)
 
 League: Silver (max)
-Begin at position : 230/1800
-Ending at position: 230/1800
+Begin at position : 190/1839
+Ending at position: -/1800
 
 # v4.2 (Worst than v4)
 
@@ -149,7 +154,7 @@ Heuristic : Replace BFS by Manhattan distance
 
 League: Silver (max)
 Begin at position : 230/1800
-Ending at position: 230/1800
+Ending at position: 230/1839
 
 # v4.1 (Worst than v4)
 
