@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__serena__read_file",
+      "mcp__serena__replace_content",
+      "mcp__serena__activate_project",
+      "mcp__serena__check_onboarding_performed",
+      "mcp__serena__get_symbols_overview",
+      "mcp__serena__find_symbol",
+      "mcp__serena__replace_symbol_body",
+      "mcp__serena__search_for_pattern",
+      "mcp__serena__execute_shell_command",
+      "mcp__serena__list_dir",
+      "Bash(g++ -std=c++20 -O2 -Wall -Wextra -o /tmp/snakebyte_test src/snakebyte_v4.4.cpp)"
+    ]
+  }
+}
