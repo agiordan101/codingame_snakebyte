@@ -1194,6 +1194,38 @@ int count_player_points(State &state, int player_id)
     return points;
 }
 
+int evaluate_end_states(State &state, int player_points, int opponent_points)
+{
+    bool player_win = false;
+    bool opponent_win = false;
+
+    // Game ends by turn count or missing energies
+    if (get_turn(state) == 200 || get_energy_count(state) == 0)
+    {
+        // Wins by score
+        if (player_points > opponent_points)
+            player_win = true;
+        else if (player_points < opponent_points)
+            opponent_win = true;
+    }
+    // Wins by killing enemy snakes
+    else if (opponent_points == 0)
+        player_win = true;
+    else if (player_points == 0)
+        opponent_win = true;
+
+    // End positions stay in beam search states, with different turn count
+    // Set a high positive score if we win, weighted by the turn number to prioritize winning sooner than later
+    if (player_win)
+        return 100 * (201 - get_turn(state));
+    // Set a high negative score if we lost, weighted by the turn number to prioritize losing later than sooner
+    if (opponent_win)
+        return -100 * (201 - get_turn(state));
+
+    // TODO: Take care of body loss !
+    return 0; // Draw
+}
+
 int evaluate_state_time = 0;
 int evaluate_state_count = 0;
 float evaluate_state(State &state, int player_id)
@@ -1212,41 +1244,9 @@ float evaluate_state(State &state, int player_id)
         player_points = count_player_points(state, map_properties.opp_id);
         opponent_points = count_player_points(state, map_properties.my_id);
     }
-    int game_points = player_points - opponent_points;
 
-    // Win by killing snakes
-    bool player_win = opponent_points == 0;
-    bool opponent_win = player_points == 0;
-
-    // Win by score
-    if (get_turn(state) == 200 || get_energy_count(state) == 0)
-    {
-        // TODO: Take care of body loss !
-        if (game_points > 0)
-            player_win = true;
-        else if (game_points < 0)
-            opponent_win = true;
-        else
-            return 0; // Draw
-    }
-
-    // End positions stay in beam search states, with different turn count
-    // Set a high positive score if we win, weighted by the turn number to prioritize winning sooner than later
-    if (player_win)
-        return 100 * (201 - get_turn(state));
-    // Set a high negative score if we lost, weighted by the turn number to prioritize losing later than sooner
-    if (opponent_win)
-        return -100 * (201 - get_turn(state));
-
-    // TODO: Add maluses/bonuses about surviving
-
-    // When there is not enough energies for the opponent player to win (without killing my snake) :
-    // Focus on surviving
-    // if (game_points > get_energy_count(state))
-    // {
-    //     // TODO: Add maluses/bonuses about surviving
-    //     return player_points;
-    // }
+    if (is_game_ended(state))
+        return evaluate_end_states(state, player_points, opponent_points);
 
     int dist_sum = 0;
     for (int i = 0; i < get_player_alive_snake_count(state, player_id); i++)
@@ -1255,9 +1255,10 @@ float evaluate_state(State &state, int player_id)
         Snake &snake = get_snake(state, snake_id);
         Pos snake_head_pos = get_snake_head_pos(snake);
 
+        // TODO: Add maluses/bonuses about surviving
+
         Pos closest;
         int dist;
-
         dist = lookup_initial_bfs_distance_to_closest_energy(state, snake_head_pos);
         // dist = find_closest_energy_cell_manhattan(state, snake_head_pos, closest);
         // dist = find_closest_energy_cell_bfs(state, snake_head_pos, closest);
@@ -1267,6 +1268,7 @@ float evaluate_state(State &state, int player_id)
         else
             dist_sum += dist;
 
+        // Add maluses for being out of map
         for (int bi = 0; bi < get_snake_body_length(snake); bi++)
         {
             Pos snake_body_pos = get_snake_body_pos(snake, bi);
@@ -1287,8 +1289,9 @@ float evaluate_state(State &state, int player_id)
     auto end_chrono = chrono::high_resolution_clock::now();
     evaluate_state_time += chrono::duration_cast<chrono::microseconds>(end_chrono - start_chrono).count();
     evaluate_state_count++;
+
     // Game points is positive if it's good for the player, negative if it's good for its opponent, so we invert it for opponent evaluation
-    return game_points + dist_score;
+    return player_points - opponent_points + dist_score;
 }
 
 int choose_best_player_moveset_time = 0;
