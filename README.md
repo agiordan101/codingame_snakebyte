@@ -159,8 +159,8 @@ MoveSet -> A list of Move
     - Increase visited state per turn about 50%
 
 League: Gold (max)
-First publication : -
-Last publication: -
+First publication : 88/1938
+Last publication: 76/1950
 
 # v4.6
 

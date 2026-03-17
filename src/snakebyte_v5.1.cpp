@@ -1,4 +1,4 @@
-// Version 5
+// Version 5.1
 
 // Algorithms :
 // v1 - Each snakes go to closest Energy cell using BFS
@@ -1224,8 +1224,12 @@ MoveSet choose_best_player_moveset(State &state, int player_id, MoveSet &previou
     return best_moveset;
 }
 
+int choose_best_snake_moves_time = 0;
+int choose_best_snake_moves_count = 0;
 MoveSet choose_best_snake_moves(State &state, int player_id)
 {
+    auto start_chrono = chrono::high_resolution_clock::now();
+
     MoveSet best_snake_moves;
     State next_state;
 
@@ -1269,6 +1273,9 @@ MoveSet choose_best_snake_moves(State &state, int player_id)
         set_moveset_move_count(best_snake_moves, i + 1);
     }
 
+    auto end_chrono = chrono::high_resolution_clock::now();
+    choose_best_snake_moves_time += chrono::duration_cast<chrono::microseconds>(end_chrono - start_chrono).count();
+    choose_best_snake_moves_count++;
     return best_snake_moves;
 }
 
@@ -1308,6 +1315,36 @@ bool has_exceeded_time_limit(auto &start_chrono, int maximum_microseconds)
 {
     auto current_chrono = chrono::high_resolution_clock::now();
     return chrono::duration_cast<chrono::microseconds>(current_chrono - start_chrono).count() >= maximum_microseconds;
+}
+
+int move_candidates_in_beam_states_time = 0;
+int move_candidates_in_beam_states_count = 0;
+void move_candidates_in_beam_states(std::vector<State> &beam_search_states, std::priority_queue<State, std::vector<State>, CompareState> &beam_search_candidates)
+{
+    auto start_chrono = chrono::high_resolution_clock::now();
+
+    // Move candidate states one by one into the beam_search state vector
+    beam_search_states.clear();
+    while (!beam_search_candidates.empty())
+    {
+        beam_search_states.push_back(beam_search_candidates.top());
+        beam_search_candidates.pop();
+    }
+
+    // Keep beam_search_states sorted for 2 reasons :
+    // - Easy access to the best one, to quickly return
+    // - Prioritize the search on the best states first.
+    std::sort(
+        beam_search_states.begin(),
+        beam_search_states.end(),
+        [](State &a, State &b)
+        {
+            return get_heuristic(a) > get_heuristic(b);
+        });
+
+    auto end_chrono = chrono::high_resolution_clock::now();
+    move_candidates_in_beam_states_time += chrono::duration_cast<chrono::microseconds>(end_chrono - start_chrono).count();
+    move_candidates_in_beam_states_count++;
 }
 
 int consider_state_to_be_candidate_time = 0;
@@ -1408,24 +1445,7 @@ MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam
         beam_search_depth++;
         fprintf(stderr, "Start beam search depth %d (%ld ym remaining)\n", beam_search_depth, maximum_microseconds - chrono::duration_cast<chrono::microseconds>(chrono::high_resolution_clock::now() - start_turn_chrono).count());
 
-        // Move candidate states one by one into the beam_search state vector
-        beam_search_states.clear();
-        while (!beam_search_candidates.empty())
-        {
-            beam_search_states.push_back(beam_search_candidates.top());
-            beam_search_candidates.pop();
-        }
-
-        // Keep beam_search_states sorted for 2 reasons :
-        // - Easy access to the best one, to quickly return
-        // - Prioritize the search on the best states first.
-        std::sort(
-            beam_search_states.begin(),
-            beam_search_states.end(),
-            [](State &a, State &b)
-            {
-                return get_heuristic(a) > get_heuristic(b);
-            });
+        move_candidates_in_beam_states(beam_search_states, beam_search_candidates);
 
         for (State &state : beam_search_states)
         {
@@ -1703,6 +1723,10 @@ int main()
         fprintf(stderr, "choose_best_player_moveset() - count : %d\n", choose_best_player_moveset_count);
         fprintf(stderr, "choose_best_player_moveset() - t/call: %f ys\n", choose_best_player_moveset_time / (float)choose_best_player_moveset_count);
 
+        fprintf(stderr, "\nchoose_best_snake_moves() - time : %d ys\n", choose_best_snake_moves_time);
+        fprintf(stderr, "choose_best_snake_moves() - count : %d\n", choose_best_snake_moves_count);
+        fprintf(stderr, "choose_best_snake_moves() - t/call: %f ys\n", choose_best_snake_moves_time / (float)choose_best_snake_moves_count);
+
         fprintf(stderr, "\ngenerate_player_movesets() - time : %d ys\n", generate_player_movesets_time);
         fprintf(stderr, "generate_player_movesets() - count : %d\n", generate_player_movesets_count);
         fprintf(stderr, "generate_player_movesets() - t/call: %f ys\n", generate_player_movesets_time / (float)generate_player_movesets_count);
@@ -1722,6 +1746,10 @@ int main()
         fprintf(stderr, "\nevaluate_state() - time : %d ys\n", evaluate_state_time);
         fprintf(stderr, "evaluate_state() - count : %d\n", evaluate_state_count);
         fprintf(stderr, "evaluate_state() - t/call: %f ys\n", evaluate_state_time / (float)evaluate_state_count);
+
+        fprintf(stderr, "\nmove_candidates_in_beam_states() - time : %d ys\n", move_candidates_in_beam_states_time);
+        fprintf(stderr, "move_candidates_in_beam_states() - count : %d\n", move_candidates_in_beam_states_count);
+        fprintf(stderr, "move_candidates_in_beam_states() - t/call: %f ys\n", move_candidates_in_beam_states_time / (float)move_candidates_in_beam_states_count);
 
         fprintf(stderr, "\nconsider_state_to_be_candidate() - time : %d ys\n", consider_state_to_be_candidate_time);
         fprintf(stderr, "consider_state_to_be_candidate() - count : %d\n", consider_state_to_be_candidate_count);
