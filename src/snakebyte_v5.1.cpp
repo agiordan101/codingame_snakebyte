@@ -471,6 +471,21 @@ struct BFSDistanceToEnergy
 // Global lookup table: For each cell, list of energies sorted by distance
 BFSDistanceToEnergy cells_to_energy_lookup_table[MAX_CELL_COUNT][MAX_ENERGY_COUNT];
 
+int lookup_initial_bfs_distance_to_closest_energy(State &state, Pos snake_head_pos)
+{
+    // Iterate from the closest to the farthest energy
+    for (int e = 0; e < MAX_ENERGY_COUNT; e++)
+    {
+        BFSDistanceToEnergy bfsdistance = cells_to_energy_lookup_table[snake_head_pos][e];
+
+        // Verify that the energy still exists
+        if (get_cell(state, bfsdistance.energy_pos) == CELL_ENERGY)
+            return bfsdistance.distance;
+    }
+
+    return -1;
+}
+
 void create_bfs_cells_to_energy_distance_lookup_table(State &state)
 {
     // BFS from each energy cell outward, blocking only platforms
@@ -1101,7 +1116,7 @@ int find_closest_energy_cell_bfs(State &state, Pos start_pos, Pos &closest_energ
     queue<pair<Pos, int>> bfs_queue;
     visited[start_pos] = true;
     bfs_queue.push(make_pair(start_pos, 0));
-    
+
     int ret = find_closest_energy_cell_recursive(state, bfs_queue, visited, closest_energy_cell_pos);
 
     auto end_chrono = chrono::high_resolution_clock::now();
@@ -1168,6 +1183,111 @@ int find_closest_energy_cell_bfs_iterative(State &state, Pos start_pos, Pos &clo
     return -1; // No energy cell found
 }
 
+void print_astar_state(State &state, Pos start_pos, Pos end_pos, bool visited[MAX_CELL_COUNT])
+{
+    for (int y = 0; y < map_properties.height; y++)
+    {
+        for (int x = 0; x < map_properties.width; x++)
+        {
+            Pos cell_pos = get_pos_from_map_coord(x, y);
+            int cell = get_cell(state, cell_pos);
+
+            if (cell_pos == start_pos)
+                fprintf(stderr, "S");
+            else if (cell_pos == end_pos)
+                fprintf(stderr, "E");
+            else if (cell == CELL_PLATFORM)
+                fprintf(stderr, "#");
+            else if (cell == CELL_EMPTY || cell == CELL_ENERGY)
+                fprintf(stderr, "%c", visited[cell_pos] ? 'X' : '_');
+            else
+                fprintf(stderr, ".");
+        }
+        fprintf(stderr, "\n");
+    }
+}
+
+struct AStartNode
+{
+    Pos pos;
+    int dist;
+};
+
+struct CompareDist
+{
+    bool operator()(const AStartNode &a, const AStartNode &b) const
+    {
+        return a.dist > b.dist;
+    }
+};
+
+int astar_time = 0;
+int astar_count = 0;
+int find_closest_energy_cell_astar(State &state, Pos start_pos, Pos &closest_energy_cell_pos)
+{
+    auto start_chrono = chrono::high_resolution_clock::now();
+
+    std::priority_queue<AStartNode, std::vector<AStartNode>, CompareDist> astar_queue;
+
+    astar_queue.push((AStartNode){start_pos, lookup_initial_bfs_distance_to_closest_energy(state, start_pos)});
+
+    bool visited[MAX_CELL_COUNT] = {false};
+    visited[start_pos] = true;
+
+    while (!astar_queue.empty())
+    {
+        // Get most promising node (closest to energy cell)
+        AStartNode current_node = astar_queue.top();
+        Pos &pos = current_node.pos;
+        astar_queue.pop();
+
+        // Check all 4 neighbors
+        Pos neighbors[4] = {
+            get_north_pos(pos), get_west_pos(pos),
+            get_east_pos(pos), get_south_pos(pos)};
+        bool oob[4] = {
+            is_north_cell_out_of_bounds(pos), is_west_cell_out_of_bounds(pos),
+            is_east_cell_out_of_bounds(pos), is_south_cell_out_of_bounds(pos)};
+
+        for (int i = 0; i < 4; i++)
+        {
+            // Dot not go out of bounds or visit already visited cells
+            if (oob[i] || visited[neighbors[i]])
+                continue;
+
+            // Closest energy cell found !
+            if (get_cell(state, neighbors[i]) == CELL_ENERGY)
+            {
+                closest_energy_cell_pos = neighbors[i];
+                // print_astar_state(state, start_pos, closest_energy_cell_pos, visited);
+
+                auto end_chrono = chrono::high_resolution_clock::now();
+                astar_time += chrono::duration_cast<chrono::microseconds>(end_chrono - start_chrono).count();
+                astar_count++;
+                return current_node.dist + 1;
+            }
+
+            // New cell found, add it to the queue if we can move on it
+            visited[neighbors[i]] = true;
+            if (get_cell(state, neighbors[i]) == CELL_EMPTY)
+            {
+                AStartNode next_node;
+                next_node.pos = neighbors[i];
+                next_node.dist = lookup_initial_bfs_distance_to_closest_energy(state, neighbors[i]);
+                astar_queue.push(next_node);
+            }
+        }
+    }
+
+    // print_astar_state(state, start_pos, closest_energy_cell_pos, visited);
+    // fprintf(stderr, "No energy cell found !!!\n");
+
+    auto end_chrono = chrono::high_resolution_clock::now();
+    astar_time += chrono::duration_cast<chrono::microseconds>(end_chrono - start_chrono).count();
+    astar_count++;
+    return -1; // No energy cell found
+}
+
 /* --- ENERGY DISTANCE - MANHATTAN--- */
 
 int find_closest_energy_cell_manhattan(State &state, Pos start_pos, Pos &closest_energy_cell_pos)
@@ -1219,25 +1339,14 @@ float evaluate_state(State &state, int player_id)
         Snake &snake = get_snake(state, snake_id);
         Pos snake_head_pos = get_snake_head_pos(snake);
 
-        // for (int e = 0; e < MAX_ENERGY_COUNT; e++)
-        // {
-        //     if (get_cell(state, cells_to_energy_lookup_table[snake_head_pos][e].energy_pos) == CELL_ENERGY)
-        //     {
-        //         dist_sum += cells_to_energy_lookup_table[snake_head_pos][e].distance;
-        //         break; // Only consider the closest energy cell distance
-        //     }
-        //     if (e == MAX_ENERGY_COUNT - 1)
-        //     {
-        //         fprintf(stderr, "Error: No energy cell found in lookup table for snake head at (%d, %d) with %d energy left\n", get_map_x(snake_head_pos), get_map_y(snake_head_pos), get_energy_count(state), get_energy_count(state));
-        //         exit(0);
-        //     }
-        // }
-
         Pos closest;
         int dist;
+
+        // dist = lookup_initial_bfs_distance_to_closest_energy(state, snake_head_pos);
         // dist = find_closest_energy_cell_manhattan(state, snake_head_pos, closest);
         // dist = find_closest_energy_cell_bfs(state, snake_head_pos, closest);
-        dist = find_closest_energy_cell_bfs_iterative(state, snake_head_pos, closest);
+        // dist = find_closest_energy_cell_bfs_iterative(state, snake_head_pos, closest);
+        dist = find_closest_energy_cell_astar(state, snake_head_pos, closest);
         if (dist == -1)
             dist_sum += MAX_MAP_WIDTH + MAX_MAP_HEIGHT; // If no energy cell found, consider it very far
         else
@@ -1731,16 +1840,24 @@ int main()
         memcpy(&state, &initial_state, sizeof(state));
         parse_turn_inputs(state);
 
-        if (turn == 0)
-            create_lookup_tables(state);
+        auto start_turn_chrono = chrono::high_resolution_clock::now();
         set_turn(state, turn);
 
-        auto start_turn_chrono = chrono::high_resolution_clock::now();
+        if (turn == 0)
+            create_lookup_tables(state);
 
         update_game_points(state); // useless ?
+
         // print_cells(state, "Turn beginning");
         // print_map(state, "Turn beginning");
         // print_map_bfs_distances(state);
+        // Pos end_pos;
+        // for (int i = 0; i < get_player_alive_snake_count(state, map_properties.my_id); i++)
+        // {
+        //     int snake_id = get_player_alive_snake_id(state, map_properties.my_id, i);
+        //     Snake &snake = get_snake(state, snake_id);
+        //     find_closest_energy_cell_astar(state, get_snake_head_pos(snake), end_pos);
+        // }
 
         MoveSet best_moveset;
         try
@@ -1783,57 +1900,60 @@ int main()
         // print_moveset(best_moveset);
 
         fprintf(stderr, "\nMax depth reached: %d\n", beam_search_depth);
-
         fprintf(stderr, "\nStates visited this turn: %d\n", beam_search_visited_states_count);
         fprintf(stderr, "Avg visited states: %d\n", (int)beam_search_average_states_visited);
 
-        fprintf(stderr, "\nchoose_best_player_moveset() - time : %d ys\n", choose_best_player_moveset_time);
-        fprintf(stderr, "choose_best_player_moveset() - count : %d\n", choose_best_player_moveset_count);
-        fprintf(stderr, "choose_best_player_moveset() - t/call: %f ys\n", choose_best_player_moveset_time / (float)choose_best_player_moveset_count);
+        // fprintf(stderr, "\nchoose_best_player_moveset() - time : %d ys\n", choose_best_player_moveset_time);
+        // fprintf(stderr, "choose_best_player_moveset() - count : %d\n", choose_best_player_moveset_count);
+        // fprintf(stderr, "choose_best_player_moveset() - t/call: %f ys\n", choose_best_player_moveset_time / (float)choose_best_player_moveset_count);
 
-        fprintf(stderr, "\nchoose_best_snake_moves() - time : %d ys\n", choose_best_snake_moves_time);
-        fprintf(stderr, "choose_best_snake_moves() - count : %d\n", choose_best_snake_moves_count);
-        fprintf(stderr, "choose_best_snake_moves() - t/call: %f ys\n", choose_best_snake_moves_time / (float)choose_best_snake_moves_count);
+        // fprintf(stderr, "\nchoose_best_snake_moves() - time : %d ys\n", choose_best_snake_moves_time);
+        // fprintf(stderr, "choose_best_snake_moves() - count : %d\n", choose_best_snake_moves_count);
+        // fprintf(stderr, "choose_best_snake_moves() - t/call: %f ys\n", choose_best_snake_moves_time / (float)choose_best_snake_moves_count);
 
-        fprintf(stderr, "\ngenerate_player_movesets() - time : %d ys\n", generate_player_movesets_time);
-        fprintf(stderr, "generate_player_movesets() - count : %d\n", generate_player_movesets_count);
-        fprintf(stderr, "generate_player_movesets() - t/call: %f ys\n", generate_player_movesets_time / (float)generate_player_movesets_count);
+        // fprintf(stderr, "\ngenerate_player_movesets() - time : %d ys\n", generate_player_movesets_time);
+        // fprintf(stderr, "generate_player_movesets() - count : %d\n", generate_player_movesets_count);
+        // fprintf(stderr, "generate_player_movesets() - t/call: %f ys\n", generate_player_movesets_time / (float)generate_player_movesets_count);
 
-        fprintf(stderr, "\nrevert_last_move() - time : %d ys\n", revert_last_move_time);
-        fprintf(stderr, "revert_last_move() - count : %d\n", revert_last_move_count);
-        fprintf(stderr, "revert_last_move() - t/call: %f ys\n", revert_last_move_time / (float)revert_last_move_count);
+        // fprintf(stderr, "\nrevert_last_move() - time : %d ys\n", revert_last_move_time);
+        // fprintf(stderr, "revert_last_move() - count : %d\n", revert_last_move_count);
+        // fprintf(stderr, "revert_last_move() - t/call: %f ys\n", revert_last_move_time / (float)revert_last_move_count);
 
-        fprintf(stderr, "\napply_moveset() - time : %d ys\n", apply_moveset_time);
-        fprintf(stderr, "apply_moveset() - count : %d\n", apply_moveset_count);
-        fprintf(stderr, "apply_moveset() - t/call: %f ys\n", apply_moveset_time / (float)apply_moveset_count);
+        // fprintf(stderr, "\napply_moveset() - time : %d ys\n", apply_moveset_time);
+        // fprintf(stderr, "apply_moveset() - count : %d\n", apply_moveset_count);
+        // fprintf(stderr, "apply_moveset() - t/call: %f ys\n", apply_moveset_time / (float)apply_moveset_count);
 
-        fprintf(stderr, "\napply_gravity() - time : %d ys\n", apply_gravity_time);
-        fprintf(stderr, "apply_gravity() - count : %d\n", apply_gravity_count);
-        fprintf(stderr, "apply_gravity() - t/call: %f ys\n", apply_gravity_time / (float)apply_gravity_count);
-
-        fprintf(stderr, "\nbfs_iterative() - time : %d ys\n", bfs_iterative_time);
-        fprintf(stderr, "bfs_iterative() - count : %d\n", bfs_iterative_count);
-        fprintf(stderr, "bfs_iterative() - t/call: %f ys\n", bfs_iterative_time / (float)bfs_iterative_count);
+        // fprintf(stderr, "\napply_gravity() - time : %d ys\n", apply_gravity_time);
+        // fprintf(stderr, "apply_gravity() - count : %d\n", apply_gravity_count);
+        // fprintf(stderr, "apply_gravity() - t/call: %f ys\n", apply_gravity_time / (float)apply_gravity_count);
 
         fprintf(stderr, "\nbfs_recursive() - time : %d ys\n", bfs_recursive_time);
         fprintf(stderr, "bfs_recursive() - count : %d\n", bfs_recursive_count);
         fprintf(stderr, "bfs_recursive() - t/call: %f ys\n", bfs_recursive_time / (float)bfs_recursive_count);
 
+        fprintf(stderr, "\nbfs_iterative() - time : %d ys\n", bfs_iterative_time);
+        fprintf(stderr, "bfs_iterative() - count : %d\n", bfs_iterative_count);
+        fprintf(stderr, "bfs_iterative() - t/call: %f ys\n", bfs_iterative_time / (float)bfs_iterative_count);
+
+        fprintf(stderr, "\nastar() - time : %d ys\n", astar_time);
+        fprintf(stderr, "astar() - count : %d\n", astar_count);
+        fprintf(stderr, "astar() - t/call: %f ys\n", astar_time / (float)astar_count);
+
         fprintf(stderr, "\nevaluate_state() - time : %d ys\n", evaluate_state_time);
         fprintf(stderr, "evaluate_state() - count : %d\n", evaluate_state_count);
         fprintf(stderr, "evaluate_state() - t/call: %f ys\n", evaluate_state_time / (float)evaluate_state_count);
 
-        fprintf(stderr, "\nmove_candidates_in_beam_states() - time : %d ys\n", move_candidates_in_beam_states_time);
-        fprintf(stderr, "move_candidates_in_beam_states() - count : %d\n", move_candidates_in_beam_states_count);
-        fprintf(stderr, "move_candidates_in_beam_states() - t/call: %f ys\n", move_candidates_in_beam_states_time / (float)move_candidates_in_beam_states_count);
+        // fprintf(stderr, "\nmove_candidates_in_beam_states() - time : %d ys\n", move_candidates_in_beam_states_time);
+        // fprintf(stderr, "move_candidates_in_beam_states() - count : %d\n", move_candidates_in_beam_states_count);
+        // fprintf(stderr, "move_candidates_in_beam_states() - t/call: %f ys\n", move_candidates_in_beam_states_time / (float)move_candidates_in_beam_states_count);
 
-        fprintf(stderr, "\nconsider_state_to_be_candidate() - time : %d ys\n", consider_state_to_be_candidate_time);
-        fprintf(stderr, "consider_state_to_be_candidate() - count : %d\n", consider_state_to_be_candidate_count);
-        fprintf(stderr, "consider_state_to_be_candidate() - t/call: %f ys\n", consider_state_to_be_candidate_time / (float)consider_state_to_be_candidate_count);
+        // fprintf(stderr, "\nconsider_state_to_be_candidate() - time : %d ys\n", consider_state_to_be_candidate_time);
+        // fprintf(stderr, "consider_state_to_be_candidate() - count : %d\n", consider_state_to_be_candidate_count);
+        // fprintf(stderr, "consider_state_to_be_candidate() - t/call: %f ys\n", consider_state_to_be_candidate_time / (float)consider_state_to_be_candidate_count);
 
-        fprintf(stderr, "\nfind_candidates_among_state_children() - time : %d ys\n", find_candidates_among_state_children_time);
-        fprintf(stderr, "find_candidates_among_state_children() - count : %d\n", find_candidates_among_state_children_count);
-        fprintf(stderr, "find_candidates_among_state_children() - t/call: %f ys\n", find_candidates_among_state_children_time / (float)find_candidates_among_state_children_count);
+        // fprintf(stderr, "\nfind_candidates_among_state_children() - time : %d ys\n", find_candidates_among_state_children_time);
+        // fprintf(stderr, "find_candidates_among_state_children() - count : %d\n", find_candidates_among_state_children_count);
+        // fprintf(stderr, "find_candidates_among_state_children() - t/call: %f ys\n", find_candidates_among_state_children_time / (float)find_candidates_among_state_children_count);
 
         print_marks(state, best_moveset);
 
