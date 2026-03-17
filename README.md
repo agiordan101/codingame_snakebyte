@@ -47,9 +47,11 @@ cg-colosseum battle \
 
 ## TODO
 
-Les wins devrait valoir toute autant de points, weighted par le turn de la win (plus on gagne tôt, mieux c'est). Sinon ils partent au combat ces malades
+- remove State &previous_state from apply_moveset
 
-Lorsqu'on pert avec plus d'energy, il vaut mieux perdre que se prendre des murs en boucle (plus dexagération de la lose)
+- Les wins devrait valoir toute autant de points, weighted par le turn de la win (plus on gagne tôt, mieux c'est). Sinon ils partent au combat ces malades
+
+- Lorsqu'on pert avec plus d'energy, il vaut mieux perdre que se prendre des murs en boucle (plus dexagération de la lose)
 
 - Tester d'autres heuristic :
     - Utiliser des ranges/bases pour priorisé les objectif, example :
@@ -74,13 +76,11 @@ Lorsqu'on pert avec plus d'energy, il vaut mieux perdre que se prendre des murs 
         en v1: On considère une seule fois les cases où la tête est passée
         en v1: On shift les pos du body ?
 - Collisions :
-- apply_moveset: Plutot que d'avoir un previous state, on pourrait juste remove_snake_in_cells_from_their_old_positions au tout début de la fonction ? 
 
 Algorithm optimisations :
 
 1. undo_move(state, move) au lieu de memcpy :
     - Cell change history: Each cell change is stored in order. undo_move would reapply them in reserve order
-
 2. bitboards ou compaction ou reduction de la taille de State
 3. Regarder "partial sort buffer"
 4. Réflechir à conserver que des pointeurs avec leur heuristic. Et un State buffer[width] réutilisable
@@ -90,8 +90,6 @@ Algorithm optimisations :
 POinters instead of state copy :
     Short-term minimal change: store pointers (or std::unique_ptr<State>) in your candidate list instead of copying whole State. Alternatively, only push the heuristic + MoveSet first_depth_moveset + a compact representation of the state (e.g., differences). The quickest patch is to store std::shared_ptr<State> or std::unique_ptr<State>.
 
-Faster sorting :
-    After generating all children for this depth (or after generating all children for a parent), if beam_search_candidates.size() > beam_width, call std::nth_element/std::partial_sort to keep only top beam_width by heuristic, then resize vector.
 
 ## Strategies
 
@@ -161,7 +159,7 @@ MoveSet -> A list of Move
     - Increase visited state per turn about 50%
 
 League: Gold (max)
-First publication : 95/1926
+First publication : -
 Last publication: -
 
 # v4.6
