@@ -47,8 +47,6 @@ cg-colosseum battle \
 
 ## TODO
 
-- remove State &previous_state from apply_moveset
-
 - Les wins devrait valoir toute autant de points, weighted par le turn de la win (plus on gagne tôt, mieux c'est). Sinon ils partent au combat ces malades
 
 - Lorsqu'on pert avec plus d'energy, il vaut mieux perdre que se prendre des murs en boucle (plus dexagération de la lose)
@@ -152,13 +150,13 @@ MoveSet -> A list of Move
 
 ## History
 
-# v5.1
+# v5.1 (Worst)
 
 Restore BFS search in heuristic, with new iterative implementation (Now the engine is faster, it could be worth it)
 
 League: Gold (max)
-First publication : -
-Last publication: -
+First publication : 83/1950
+Last publication: 80/1950
 
 # v5
 

@@ -31,6 +31,7 @@
 // v5 - Beam search use a min-heap storage for candidates instead of classic vector
 //      - Reduce consider_state_to_be_candidate() from 67% to 15% of the time spent per turn
 //      - Increase visited state per turn about 50%
+//   v5.1 - Restore BFS search in heuristic, with new iterative implementation (Now the engine is faster, it could be worth it)
 
 #undef _GLIBCXX_DEBUG
 #pragma GCC optimize("Ofast,unroll-loops,omit-frame-pointer,inline")

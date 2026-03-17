@@ -1,4 +1,4 @@
-// Version 5.1
+// Version 5.2
 
 // Algorithms :
 // v1 - Each snakes go to closest Energy cell using BFS
@@ -32,6 +32,7 @@
 //      - Reduce consider_state_to_be_candidate() from 67% to 15% of the time spent per turn
 //      - Increase visited state per turn about 50%
 //   v5.1 - Restore BFS search in heuristic, with new iterative implementation (Now the engine is faster, it could be worth it)
+//   v5.2 - Small changes
 
 #undef _GLIBCXX_DEBUG
 #pragma GCC optimize("Ofast,unroll-loops,omit-frame-pointer,inline")
@@ -470,6 +471,21 @@ struct BFSDistanceToEnergy
 
 // Global lookup table: For each cell, list of energies sorted by distance
 BFSDistanceToEnergy cells_to_energy_lookup_table[MAX_CELL_COUNT][MAX_ENERGY_COUNT];
+
+int lookup_initial_bfs_distance_to_closest_energy(State &state, Pos snake_head_pos)
+{
+    // Iterate from the closest to the farthest energy
+    for (int e = 0; e < MAX_ENERGY_COUNT; e++)
+    {
+        BFSDistanceToEnergy bfsdistance = cells_to_energy_lookup_table[snake_head_pos][e];
+
+        // Verify that the energy still exists
+        if (get_cell(state, bfsdistance.energy_pos) == CELL_ENERGY)
+            return bfsdistance.distance;
+    }
+
+    return -1;
+}
 
 void create_bfs_cells_to_energy_distance_lookup_table(State &state)
 {
@@ -995,12 +1011,11 @@ void apply_gravity(State &state)
 
 int apply_moveset_time = 0;
 int apply_moveset_count = 0;
-void apply_moveset(State &previous_state, State &state, MoveSet &moveset)
+void apply_moveset(State &state, MoveSet &moveset)
 {
     auto start_chrono = chrono::high_resolution_clock::now();
 
-    int previous_turn = get_turn(previous_state);
-    set_turn(state, previous_turn + 1);
+    set_turn(state, get_turn(state) + 1);
 
     Pos eaten_energies[MAX_SNAKE_COUNT];
     int eaten_energies_count = 0;
@@ -1219,25 +1234,13 @@ float evaluate_state(State &state, int player_id)
         Snake &snake = get_snake(state, snake_id);
         Pos snake_head_pos = get_snake_head_pos(snake);
 
-        // for (int e = 0; e < MAX_ENERGY_COUNT; e++)
-        // {
-        //     if (get_cell(state, cells_to_energy_lookup_table[snake_head_pos][e].energy_pos) == CELL_ENERGY)
-        //     {
-        //         dist_sum += cells_to_energy_lookup_table[snake_head_pos][e].distance;
-        //         break; // Only consider the closest energy cell distance
-        //     }
-        //     if (e == MAX_ENERGY_COUNT - 1)
-        //     {
-        //         fprintf(stderr, "Error: No energy cell found in lookup table for snake head at (%d, %d) with %d energy left\n", get_map_x(snake_head_pos), get_map_y(snake_head_pos), get_energy_count(state), get_energy_count(state));
-        //         exit(0);
-        //     }
-        // }
-
         Pos closest;
         int dist;
+
+        dist = lookup_initial_bfs_distance_to_closest_energy(state, snake_head_pos);
         // dist = find_closest_energy_cell_manhattan(state, snake_head_pos, closest);
         // dist = find_closest_energy_cell_bfs(state, snake_head_pos, closest);
-        dist = find_closest_energy_cell_bfs_iterative(state, snake_head_pos, closest);
+        // dist = find_closest_energy_cell_bfs_iterative(state, snake_head_pos, closest);
         if (dist == -1)
             dist_sum += MAX_MAP_WIDTH + MAX_MAP_HEIGHT; // If no energy cell found, consider it very far
         else
@@ -1272,7 +1275,7 @@ MoveSet choose_best_player_moveset(State &state, int player_id, MoveSet &previou
         revert_last_move(state, next_state);
 
         MoveSet turn_moveset = merge_movesets(previous_player_moveset, movesets[i]);
-        apply_moveset(state, next_state, turn_moveset);
+        apply_moveset(next_state, turn_moveset);
 
         float evaluation = evaluate_state(next_state, player_id);
         if (best_evaluation < evaluation)
@@ -1326,7 +1329,7 @@ MoveSet choose_best_snake_moves(State &state, int player_id)
             MoveSet turn_moveset = merge_movesets(best_snake_moves, snake_moveset);
 
             memcpy(&next_state, &state, sizeof(State));
-            apply_moveset(state, next_state, turn_moveset);
+            apply_moveset(next_state, turn_moveset);
 
             float evaluation = evaluate_state(next_state, player_id);
 
@@ -1356,7 +1359,7 @@ void print_marks(State &state, MoveSet best_moveset)
         Snake &snake = get_snake(state, snake_id);
 
         Pos closest;
-        int dist = find_closest_energy_cell_bfs(state, get_snake_head_pos(snake), closest);
+        int dist = find_closest_energy_cell_bfs_iterative(state, get_snake_head_pos(snake), closest);
 
         if (dist != -1)
             cout << "MARK " << get_map_x(closest) << " " << get_map_y(closest) << ";";
@@ -1465,7 +1468,7 @@ void find_candidates_among_state_children(State &state, int player_id, std::prio
         revert_last_move(state, next_state);
 
         MoveSet turn_moveset = merge_movesets(opponent_moveset, ally_movesets[i]);
-        apply_moveset(state, next_state, turn_moveset);
+        apply_moveset(next_state, turn_moveset);
 
         float heuristic = evaluate_state(next_state, player_id);
         set_heuristic(next_state, heuristic);
@@ -1731,13 +1734,14 @@ int main()
         memcpy(&state, &initial_state, sizeof(state));
         parse_turn_inputs(state);
 
-        if (turn == 0)
-            create_lookup_tables(state);
+        auto start_turn_chrono = chrono::high_resolution_clock::now();
         set_turn(state, turn);
 
-        auto start_turn_chrono = chrono::high_resolution_clock::now();
+        if (turn == 0)
+            create_lookup_tables(state);
 
         update_game_points(state); // useless ?
+
         // print_cells(state, "Turn beginning");
         // print_map(state, "Turn beginning");
         // print_map_bfs_distances(state);
@@ -1811,13 +1815,13 @@ int main()
         fprintf(stderr, "apply_gravity() - count : %d\n", apply_gravity_count);
         fprintf(stderr, "apply_gravity() - t/call: %f ys\n", apply_gravity_time / (float)apply_gravity_count);
 
-        fprintf(stderr, "\nbfs_iterative() - time : %d ys\n", bfs_iterative_time);
-        fprintf(stderr, "bfs_iterative() - count : %d\n", bfs_iterative_count);
-        fprintf(stderr, "bfs_iterative() - t/call: %f ys\n", bfs_iterative_time / (float)bfs_iterative_count);
+        // fprintf(stderr, "\nbfs_iterative() - time : %d ys\n", bfs_iterative_time);
+        // fprintf(stderr, "bfs_iterative() - count : %d\n", bfs_iterative_count);
+        // fprintf(stderr, "bfs_iterative() - t/call: %f ys\n", bfs_iterative_time / (float)bfs_iterative_count);
 
-        fprintf(stderr, "\nbfs_recursive() - time : %d ys\n", bfs_recursive_time);
-        fprintf(stderr, "bfs_recursive() - count : %d\n", bfs_recursive_count);
-        fprintf(stderr, "bfs_recursive() - t/call: %f ys\n", bfs_recursive_time / (float)bfs_recursive_count);
+        // fprintf(stderr, "\nbfs_recursive() - time : %d ys\n", bfs_recursive_time);
+        // fprintf(stderr, "bfs_recursive() - count : %d\n", bfs_recursive_count);
+        // fprintf(stderr, "bfs_recursive() - t/call: %f ys\n", bfs_recursive_time / (float)bfs_recursive_count);
 
         fprintf(stderr, "\nevaluate_state() - time : %d ys\n", evaluate_state_time);
         fprintf(stderr, "evaluate_state() - count : %d\n", evaluate_state_count);
