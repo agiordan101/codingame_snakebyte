@@ -47,10 +47,6 @@ cg-colosseum battle \
 
 ## TODO
 
-- Les wins devrait valoir toute autant de points, weighted par le turn de la win (plus on gagne tôt, mieux c'est). Sinon ils partent au combat ces malades
-
-- Lorsqu'on pert avec plus d'energy, il vaut mieux perdre que se prendre des murs en boucle (plus dexagération de la lose)
-
 - Tester d'autres heuristic :
     - Utiliser des ranges/bases pour priorisé les objectif, example :
         Game result : 100 * w
@@ -166,7 +162,7 @@ Last publication: 80/1950
 
 League: Gold (max)
 First publication : 88/1938
-Last publication: 80/1950
+Last publication: 62/1950
 
 # v4.6
 

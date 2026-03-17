@@ -32,7 +32,9 @@
 //      - Reduce consider_state_to_be_candidate() from 67% to 15% of the time spent per turn
 //      - Increase visited state per turn about 50%
 //   v5.1 - Restore BFS search in heuristic, with new iterative implementation (Now the engine is faster, it could be worth it)
-//   v5.2 - Small changes
+//   v5.2 - Add maluses when body pieces are out of map
+//          - Align end game heuristics
+//          - Take care of win/lose when there is the same amount of snakes, but different amount of losses
 
 #undef _GLIBCXX_DEBUG
 #pragma GCC optimize("Ofast,unroll-loops,omit-frame-pointer,inline")
@@ -1116,7 +1118,7 @@ int find_closest_energy_cell_bfs(State &state, Pos start_pos, Pos &closest_energ
     queue<pair<Pos, int>> bfs_queue;
     visited[start_pos] = true;
     bfs_queue.push(make_pair(start_pos, 0));
-    
+
     int ret = find_closest_energy_cell_recursive(state, bfs_queue, visited, closest_energy_cell_pos);
 
     auto end_chrono = chrono::high_resolution_clock::now();
@@ -1212,20 +1214,43 @@ float evaluate_state(State &state, int player_id)
 {
     auto start_chrono = chrono::high_resolution_clock::now();
 
-    // Set a high negative score if we lost, weighted by the turn number to prioritize losing later than sooner
     int player_points = player_id == map_properties.my_id ? get_my_points(state) : get_opp_points(state);
-    if (player_points == 0)
+    int opponent_points = player_id == map_properties.my_id ? get_opp_points(state) : get_my_points(state);
+    int game_points = player_points - opponent_points;
+
+    // Win by killing snakes
+    bool player_win = opponent_points == 0;
+    bool opponent_win = player_points == 0;
+
+    // Win by score
+    if (get_turn(state) == 200 || get_energy_count(state) == 0)
+    {
+        // TODO: Take care of body loss !
+        if (game_points > 0)
+            player_win = true;
+        else if (game_points < 0)
+            opponent_win = true;
+        else
+            return 0; // Draw
+    }
+
+    // End positions stay in beam search states, with different turn count
+    // Set a high positive score if we win, weighted by the turn number to prioritize winning sooner than later
+    if (player_win)
+        return 100 * (201 - get_turn(state));
+    // Set a high negative score if we lost, weighted by the turn number to prioritize losing later than sooner
+    if (opponent_win)
         return -100 * (201 - get_turn(state));
 
-    // Set a high positive score if we win, weighted by the turn number to prioritize winning sooner than later
-    int opponent_points = player_id == map_properties.my_id ? get_opp_points(state) : get_my_points(state);
-    if (opponent_points == 0)
-        return 100 * (201 - get_turn(state));
+    // TODO: Add maluses/bonuses about surviving
 
-    // Make the score difference more important at the end of the game, to prioritize winning more than heuristics objectives
-    int game_points = player_points - opponent_points;
-    if (get_turn(state) == 200 || get_energy_count(state) == 0)
-        return game_points * 10;
+    // When there is not enough energies for the opponent player to win (without killing my snake) :
+    // Focus on surviving
+    // if (game_points > get_energy_count(state))
+    // {
+    //     // TODO: Add maluses/bonuses about surviving
+    //     return player_points;
+    // }
 
     int dist_sum = 0;
     for (int i = 0; i < get_player_alive_snake_count(state, player_id); i++)
@@ -1245,9 +1270,23 @@ float evaluate_state(State &state, int player_id)
             dist_sum += MAX_MAP_WIDTH + MAX_MAP_HEIGHT; // If no energy cell found, consider it very far
         else
             dist_sum += dist;
+
+        for (int bi = 0; bi < get_snake_body_length(snake); bi++)
+        {
+            Pos snake_body_pos = get_snake_body_pos(snake, bi);
+
+            if (get_x(snake_body_pos) < MAP_PADDING ||
+                get_x(snake_body_pos) >= MAX_WIDTH - MAP_PADDING ||
+                get_y(snake_body_pos) < MAP_PADDING ||
+                get_y(snake_body_pos) >= MAX_HEIGHT - MAP_PADDING)
+            {
+                dist_sum += 1;
+            }
+        }
     }
 
-    float dist_score = dist_sum != 0 ? 1.0 / dist_sum : 0.0;
+    // Multiply dist so distance=1 doesn't be equivalent to a game point
+    float dist_score = dist_sum != 0 ? 1.0 / (2 * dist_sum) : 0.0;
 
     auto end_chrono = chrono::high_resolution_clock::now();
     evaluate_state_time += chrono::duration_cast<chrono::microseconds>(end_chrono - start_chrono).count();
