@@ -154,6 +154,16 @@ MoveSet -> A list of Move
 
 ## History
 
+# v5
+
+- Beam search use a min-heap storage for candidates instead of classic vector
+    - Reduce consider_state_to_be_candidate() from 67% to 15% of the time spent per turn
+    - Increase visited state per turn about 50%
+
+League: Gold (max)
+First publication : 95/1926
+Last publication: -
+
 # v4.6
 
 - Simplify apply_moveset: Optimize snake mouvements in cells (Don't remove and reapply each turns)
@@ -172,7 +182,7 @@ Last publication: -
 
 League: Gold (max)
 First publication : 110/1926
-Last publication: 110/1926
+Last publication: -
 
 # v4.4
 
