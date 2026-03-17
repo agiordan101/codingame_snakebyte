@@ -78,13 +78,12 @@ Lorsqu'on pert avec plus d'energy, il vaut mieux perdre que se prendre des murs 
 
 Algorithm optimisations :
 
-1. 
-    apply_move(state, move)
-    undo_move(state, move)
-    au lieu de memcpy
+1. undo_move(state, move) au lieu de memcpy :
+    - Cell change history: Each cell change is stored in order. undo_move would reapply them in reserve order
 
 2. bitboards ou compaction ou reduction de la taille de State
-
+3. Regarder "partial sort buffer"
+4. Réflechir à conserver que des pointeurs avec leur heuristic. Et un State buffer[width] réutilisable
 
 
 
@@ -161,7 +160,7 @@ MoveSet -> A list of Move
 - Add early return when collision are detected
 
 League: Gold (max)
-First publication : 110/1926
+First publication : 95/1926
 Last publication: -
 
 # v4.5
