@@ -152,6 +152,14 @@ MoveSet -> A list of Move
 
 ## History
 
+# v5.1
+
+Restore BFS search in heuristic, with new iterative implementation (Now the engine is faster, it could be worth it)
+
+League: Gold (max)
+First publication : -
+Last publication: -
+
 # v5
 
 - Beam search use a min-heap storage for candidates instead of classic vector
@@ -160,7 +168,7 @@ MoveSet -> A list of Move
 
 League: Gold (max)
 First publication : 88/1938
-Last publication: 76/1950
+Last publication: 80/1950
 
 # v4.6
 
