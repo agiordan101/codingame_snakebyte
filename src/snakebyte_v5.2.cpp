@@ -204,8 +204,6 @@ struct State
 {
     int turn;
     bool game_ended;
-    int my_points;
-    int opp_points;
 
     int cells[MAX_CELL_COUNT]; // 0-7: snake_id, 8: CELL_EMPTY, 9: CELL_PLATFORM, 10: CELL_ENERGY
 
@@ -226,8 +224,6 @@ struct State
 
 int get_turn(State &state) { return state.turn; }
 bool is_game_ended(State &state) { return state.game_ended; }
-int get_my_points(State &state) { return state.my_points; }
-int get_opp_points(State &state) { return state.opp_points; }
 int get_energy_count(State &state) { return state.energy_count; }
 int get_cell(State &state, Pos pos) { return state.cells[pos]; }
 Snake &get_snake(State &state, int snake_id) { return state.snakes[snake_id]; }
@@ -241,8 +237,6 @@ MoveSet &get_first_depth_moveset(State &state) { return state.first_depth_movese
 
 void set_turn(State &state, int turn) { state.turn = turn; }
 void set_game_ended(State &state) { state.game_ended = true; }
-void set_my_points(State &state, int points) { state.my_points = points; }
-void set_opp_points(State &state, int points) { state.opp_points = points; }
 void set_energy_count(State &state, int count) { state.energy_count = count; }
 void set_cell(State &state, Pos pos, int value) { state.cells[pos] = value; }
 void set_energy(State &state, int index, Pos pos) { state.energies[index] = pos; }
@@ -322,29 +316,6 @@ void remove_energy(State &state, Pos energy)
     }
 }
 
-void update_game_points(State &state)
-{
-    // Sum lengths of alive snakes for my player
-    int my_total_length = 0;
-    for (int i = 0; i < get_player_alive_snake_count(state, map_properties.my_id); i++)
-    {
-        int snake_id = get_player_alive_snake_id(state, map_properties.my_id, i);
-        Snake &snake = get_snake(state, snake_id);
-        my_total_length += get_snake_body_length(snake);
-    }
-    set_my_points(state, my_total_length);
-
-    // Sum lengths of alive snakes for opponent
-    int opp_total_length = 0;
-    for (int i = 0; i < get_player_alive_snake_count(state, map_properties.opp_id); i++)
-    {
-        int snake_id = get_player_alive_snake_id(state, map_properties.opp_id, i);
-        Snake &snake = get_snake(state, snake_id);
-        opp_total_length += get_snake_body_length(snake);
-    }
-    set_opp_points(state, opp_total_length);
-}
-
 int revert_last_move_time = 0;
 int revert_last_move_count = 0;
 void revert_last_move(State &last_state, State &state)
@@ -357,6 +328,8 @@ void revert_last_move(State &last_state, State &state)
     revert_last_move_time += chrono::duration_cast<chrono::microseconds>(end_chrono - start_chrono).count();
     revert_last_move_count++;
 }
+
+int count_player_points(State &state, int player_id);
 
 /* --- TOOL FUNCTIONS --- */
 
@@ -379,7 +352,7 @@ int find_closest_energy_cell_bfs(State &state, Pos start_pos, Pos &closest_energ
 void print_cells(State &state, string title = "")
 {
     if (title != "")
-        fprintf(stderr, "(dPoint=%d) %s\n", get_my_points(state) - get_opp_points(state), title.c_str());
+        fprintf(stderr, "(dPoint=%d) %s\n", count_player_points(state, map_properties.my_id) - count_player_points(state, map_properties.opp_id), title.c_str());
 
     for (int y = 0; y < MAX_HEIGHT; y++)
     {
@@ -409,7 +382,7 @@ void print_cells(State &state, string title = "")
 void print_map(State &state, string title = "")
 {
     if (title != "")
-        fprintf(stderr, "(dPoint=%d) %s\n", get_my_points(state) - get_opp_points(state), title.c_str());
+        fprintf(stderr, "(dPoint=%d) %s\n", count_player_points(state, map_properties.my_id) - count_player_points(state, map_properties.opp_id), title.c_str());
 
     for (int y = 0; y < map_properties.height; y++)
     {
@@ -1033,7 +1006,6 @@ void apply_moveset(State &state, MoveSet &moveset)
     apply_snake_collisions(state, colliding_snakes, colliding_snake_count);
 
     apply_gravity(state);
-    update_game_points(state);
 
     if (get_turn(state) == 200 ||
         get_player_alive_snake_count(state, map_properties.my_id) == 0 ||
@@ -1208,14 +1180,38 @@ int find_closest_energy_cell_manhattan(State &state, Pos start_pos, Pos &closest
 
 /* --- DECISION MAKING --- */
 
+int count_player_points(State &state, int player_id)
+{
+    // Sum lengths of alive snakes for my player
+    int points = 0;
+    for (int i = 0; i < get_player_alive_snake_count(state, player_id); i++)
+    {
+        int snake_id = get_player_alive_snake_id(state, player_id, i);
+        Snake &snake = get_snake(state, snake_id);
+        points += get_snake_body_length(snake);
+    }
+
+    return points;
+}
+
 int evaluate_state_time = 0;
 int evaluate_state_count = 0;
 float evaluate_state(State &state, int player_id)
 {
     auto start_chrono = chrono::high_resolution_clock::now();
 
-    int player_points = player_id == map_properties.my_id ? get_my_points(state) : get_opp_points(state);
-    int opponent_points = player_id == map_properties.my_id ? get_opp_points(state) : get_my_points(state);
+    int player_points;
+    int opponent_points;
+    if (player_id == map_properties.my_id)
+    {
+        player_points = count_player_points(state, map_properties.my_id);
+        opponent_points = count_player_points(state, map_properties.opp_id);
+    }
+    else
+    {
+        player_points = count_player_points(state, map_properties.opp_id);
+        opponent_points = count_player_points(state, map_properties.my_id);
+    }
     int game_points = player_points - opponent_points;
 
     // Win by killing snakes
@@ -1778,8 +1774,6 @@ int main()
 
         if (turn == 0)
             create_lookup_tables(state);
-
-        update_game_points(state); // useless ?
 
         // print_cells(state, "Turn beginning");
         // print_map(state, "Turn beginning");
