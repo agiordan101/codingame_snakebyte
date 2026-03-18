@@ -37,6 +37,7 @@
 //           - Take care of win/lose with ex-aequo game points, but different amount of losses
 //           - refacto: Count game points in realtime instead of storing them
 //      v5.3 - Add bonuses depending on the first body index on a platform. The closer to the head, the more bonus
+//           - Weight win/lose heuristic by ally player points and turns.
 
 #undef _GLIBCXX_DEBUG
 #pragma GCC optimize("Ofast,unroll-loops,omit-frame-pointer,inline")
@@ -1205,6 +1206,21 @@ int count_player_points(State &state, int player_id)
     return points;
 }
 
+int encode_lexicographic_priority(int a, int b, int b_max)
+{
+    // Multiply A by maximum B value to prioritize A changes over any B changes
+    return a * b_max + b;
+}
+
+// int encode_lexicographic_priority(int a, int b, int b_max, int c, int c_max)
+// {
+//     b = encode_lexicographic_priority(b, c, c_max);
+//     b_max = b_max * c_max;
+
+//     // Multiply A by maximum BC value to prioritize A changes over any BC changes
+//     return encode_lexicographic_priority(a, b, b_max);
+// }
+
 int evaluate_end_states(State &state, int player_id, int player_points, int opponent_points)
 {
     bool player_win = false;
@@ -1234,12 +1250,18 @@ int evaluate_end_states(State &state, int player_id, int player_points, int oppo
         player_win = true;
 
     // End positions stay in beam search states, with different turn count
-    // Set a high positive score if we win, weighted by the turn number to prioritize winning sooner than later
+    // Start from a positive score if we win, and increase it by :
+    // - player points: We should try to grow or not lose snakes
+    // - turn: We should try to win as fast as possible
     if (player_win)
-        return 100 * (201 - get_turn(state));
-    // Set a high negative score if we lost, weighted by the turn number to prioritize losing later than sooner
+        return 1000 + encode_lexicographic_priority(player_points, (201 - get_turn(state)), 200);
+
+    // Start from a negative score if we lose, and increase it by :
+    // - player points: We should still try to grow or not lose snakes
+    // - turn: We should try to delay the lose
+    // 100 player point max * 200 turns max = 20 000 -> return -1000 maximum
     if (opponent_win)
-        return -100 * (201 - get_turn(state));
+        return -21000 + encode_lexicographic_priority(player_points, get_turn(state), 200);
 
     // Draw
     return 0;

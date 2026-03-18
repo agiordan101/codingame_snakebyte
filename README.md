@@ -53,21 +53,18 @@ cg-colosseum battle \
 
 Tester d'autres heuristic :
 
-- Vu que 2 wins ont le même score, il s'en fou de se prendre des murs avant. Sauf que des fois, ca ne se passe pas comme prévu et on lose parce qu'il sest pris des murs
-- Utiliser des ranges/bases pour priorisé les objectif, example :
-    Game result : 100 * w
-    Game point : 10 * p
-    Energy dist: 1 * d
-    Closest ally snake: 0.1 * d
-    Head outside platform: 0.5
-    ...
+- Pour départager 2 energies qui ont plus ou moins la meme distance, on pourrait rajouter entre [0, 2] un score correspondant à la somme des distance avec toutes les energies
+
 - Ajouter des bonus en fonction de ce qu'il y a autour du snake :
     - Platform: Bonus weighted par l'idex du PREMIER body qui est sur une platform (Encourage la tête à retrouver des platforms)
     - Snake allié: Pareil que pour les platforms, mais avec un bonus plus faible
     - Snake enemy: Pareil que pour les platforms, mais avec un malus
+
 - Créer une map de distance entre les cases au dessus des platforms et les energies, avec BFS. les cases qui ne sont pas au dessus : -1
     - Quand la case est plus haut que l'énergie : On prend que X (manhattan ducoup ?)
+    
 - Avoir un BFS avec gravité qui determine si un snake peut ateindre une energy, sinon faire en sorte qu'il se raproche de la queue d'un allié
+    
 - A faire après le beam search, pour correctement évaluer l'amélioration du ratio temps/précision de l'heuristic : Faire un nouveau DFS qui prends en compte la gravité et son body :
     On prends l'état actuel
     On fait bouger que ce snake
@@ -82,6 +79,7 @@ Algorithm optimisations :
 2. bitboards ou compaction ou reduction de la taille de State
 3. Regarder "partial sort buffer"
 4. Réflechir à conserver que des pointeurs avec leur heuristic. Et un State buffer[width] réutilisable
+
 
 POinters instead of state copy :
     Short-term minimal change: store pointers (or std::unique_ptr<State>) in your candidate list instead of copying whole State. Alternatively, only push the heuristic + MoveSet first_depth_moveset + a compact representation of the state (e.g., differences). The quickest patch is to store std::shared_ptr<State> or std::unique_ptr<State>.
@@ -154,7 +152,7 @@ Add bonuses depending on the first body index on a platform. The closer to the h
 
 League: Gold (max)
 First publication : 62/2062
-Last publication: -
+Last publication: 90/2062
 
 # v5.2
 
