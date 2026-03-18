@@ -152,7 +152,7 @@ Add bonuses depending on the first body index on a platform. The closer to the h
 
 League: Gold (max)
 First publication : 62/2062
-Last publication: 90/2062
+Last publication: 70/2062
 
 # v5.2
 

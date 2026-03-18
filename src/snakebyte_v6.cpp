@@ -1471,9 +1471,9 @@ void print_marks(State &state, MoveSet best_moveset)
 
 struct CompareState
 {
-    bool operator()(State &a, State &b) const
+    bool operator()(State *a, State *b) const
     {
-        return get_heuristic(a) > get_heuristic(b);
+        return get_heuristic(*a) > get_heuristic(*b);
     }
 };
 
@@ -1489,58 +1489,60 @@ bool has_exceeded_time_limit(auto &start_chrono, int maximum_microseconds)
     return chrono::duration_cast<chrono::microseconds>(current_chrono - start_chrono).count() >= maximum_microseconds;
 }
 
-int move_candidates_in_beam_states_time = 0;
-int move_candidates_in_beam_states_count = 0;
-void move_candidates_in_beam_states(std::vector<State> &beam_search_states, std::priority_queue<State, std::vector<State>, CompareState> &beam_search_candidates)
-{
-    auto start_chrono = chrono::high_resolution_clock::now();
-
-    // Move candidate states one by one into the beam_search state vector
-    beam_search_states.clear();
-    while (!beam_search_candidates.empty())
-    {
-        beam_search_states.push_back(beam_search_candidates.top());
-        beam_search_candidates.pop();
-    }
-
-    // Keep beam_search_states sorted for 2 reasons :
-    // - Easy access to the best one, to quickly return
-    // - Prioritize the search on the best states first.
-    std::sort(
-        beam_search_states.begin(),
-        beam_search_states.end(),
-        [](State &a, State &b)
-        {
-            return get_heuristic(a) > get_heuristic(b);
-        });
-
-    auto end_chrono = chrono::high_resolution_clock::now();
-    move_candidates_in_beam_states_time += chrono::duration_cast<chrono::microseconds>(end_chrono - start_chrono).count();
-    move_candidates_in_beam_states_count++;
-}
-
 int consider_state_to_be_candidate_time = 0;
 int consider_state_to_be_candidate_count = 0;
-void consider_state_to_be_candidate(State &state, MoveSet &last_moveset, priority_queue<State, std::vector<State>, CompareState> &beam_search_candidates, int beam_width)
+void consider_state_to_be_candidate(State *state_addr, MoveSet &last_moveset, std::priority_queue<State *, std::vector<State *>, CompareState> *beam_candidates_queue, int beam_width)
 {
     auto start_chrono = chrono::high_resolution_clock::now();
     beam_search_visited_states_count++;
 
-    if (beam_search_candidates.size() < beam_width)
+    // fprintf(stderr, "consider_state_to_be_candidate (%p): Candidate queue size: %d\n", (int)beam_candidates_queue->size());
+
+    State &state = *state_addr;
+    if (beam_candidates_queue->size() < beam_width)
     {
+        // fprintf(stderr, "consider_state_to_be_candidate (%p): Adding state to candidate queue\n", state_addr);
+
         // Save the candidate moveset for the current game turn choice
         // Can only happen here because max_moveset_count < beam_width, so we're not comparing heuristic on the first turn
         if (beam_search_depth == 1)
+        {
+            // fprintf(stderr, "consider_state_to_be_candidate (%p): Saving moveset for first depth\n", state_addr);
+
+            // if (get_moveset_move_count(last_moveset) == 0)
+            // {
+            //     fprintf(stderr, "consider_state_to_be_candidate: Depth %d: last_moveset.move_count == 0: No moveset found for state %p\n", beam_search_depth, &state);
+            //     exit(0);
+            // }
+
             set_first_depth_moveset(state, last_moveset);
 
-        beam_search_candidates.push(state);
+            // if (get_moveset_move_count(get_first_depth_moveset(state)) == 0)
+            // {
+            //     fprintf(stderr, "consider_state_to_be_candidate: Depth %d: get_moveset_move_count(get_first_depth_moveset(state)): No moveset found for state %p\n", beam_search_depth, &state);
+            //     exit(0);
+            // }
+            // print_moveset(last_moveset);
+        }
+
+        beam_candidates_queue->push(state_addr);
     }
     // Save the new promising state if it's better than the current "worst best score"
-    else if (get_heuristic(state) > get_heuristic((State &)beam_search_candidates.top()))
+    else if (get_heuristic(state) > get_heuristic((State &)beam_candidates_queue->top()))
     {
-        beam_search_candidates.pop();       // Remove the worst state
-        beam_search_candidates.push(state); // Add the new state
+        // fprintf(stderr, "consider_state_to_be_candidate (%p): Replacing worst state in candidate queue\n", state_addr);
+        if (beam_search_depth == 1)
+            set_first_depth_moveset(state, last_moveset);
+
+        beam_candidates_queue->pop();            // Remove the worst state
+        beam_candidates_queue->push(state_addr); // Add the new state
     }
+    // else
+    // {
+    //     fprintf(stderr, "consider_state_to_be_candidate: State %p not a candidate because its h=%f < h=%d from current candidate top\n", state_addr, get_heuristic(state), get_heuristic((State &)beam_candidates_queue->top()));
+    // }
+
+    // fprintf(stderr, "consider_state_to_be_candidate (%p): end\n");
 
     auto end_chrono = chrono::high_resolution_clock::now();
     consider_state_to_be_candidate_time += chrono::duration_cast<chrono::microseconds>(end_chrono - start_chrono).count();
@@ -1549,9 +1551,11 @@ void consider_state_to_be_candidate(State &state, MoveSet &last_moveset, priorit
 
 int find_candidates_among_state_children_time = 0;
 int find_candidates_among_state_children_count = 0;
-void find_candidates_among_state_children(State &state, int player_id, std::priority_queue<State, std::vector<State>, CompareState> &beam_search_candidates, int beam_width)
+void find_candidates_among_state_children(State &state, int player_id, State *beam_candidates, int *next_candidate_index, std::priority_queue<State *, std::vector<State *>, CompareState> *beam_candidates_queue, int beam_width)
 {
     auto start_chrono = chrono::high_resolution_clock::now();
+
+    // fprintf(stderr, "find_candidates_among_state_children (%p): player_id=%d\n", &state, player_id);
 
     MoveSet turn_beginning_moveset = {};
     set_moveset_move_count(turn_beginning_moveset, 0);
@@ -1561,12 +1565,36 @@ void find_candidates_among_state_children(State &state, int player_id, std::prio
     MoveSet ally_movesets[MAX_PLAYER_MOVE_SETS];
     int ally_moveset_count = generate_player_movesets(state, player_id, ally_movesets);
 
-    State next_state;
-    memcpy(&next_state, &state, sizeof(State));
+    // fprintf(stderr, "find_candidates_among_state_children: %d moves generated\n", ally_moveset_count);
+    // if (ally_moveset_count == 0)
+    // {
+    //     print_map(state);
+    //     exit(0);
+    // }
 
     for (int i = 0; i < ally_moveset_count; i++)
     {
+        // print_moveset(ally_movesets[i]);
+
+        State *next_state_addr = &beam_candidates[*next_candidate_index];
+        (*next_candidate_index)++;
+
+        // fprintf(stderr, "find_candidates_among_state_children (%p): Pick new state from buffer index %d: %p\n", &state, *next_candidate_index - 1, next_state_addr);
+
+        State &next_state = *next_state_addr;
         revert_last_move(state, next_state);
+
+        // Preserve the first depth moveset from parent
+        // if (beam_search_depth > 1)
+        // {
+        //     set_first_depth_moveset(next_state, get_first_depth_moveset(state));
+        // }
+
+        // if (beam_search_depth > 1 && get_moveset_move_count(get_first_depth_moveset(next_state)) == 0)
+        // {
+        //     fprintf(stderr, "find_candidates_among_state_children: Depth %d: No moveset found for state %p\n", beam_search_depth, &next_state);
+        //     exit(0);
+        // }
 
         MoveSet turn_moveset = merge_movesets(opponent_moveset, ally_movesets[i]);
         apply_moveset(next_state, turn_moveset);
@@ -1574,7 +1602,7 @@ void find_candidates_among_state_children(State &state, int player_id, std::prio
         float heuristic = evaluate_state(next_state, player_id);
         set_heuristic(next_state, heuristic);
 
-        consider_state_to_be_candidate(next_state, ally_movesets[i], beam_search_candidates, beam_width);
+        consider_state_to_be_candidate(next_state_addr, ally_movesets[i], beam_candidates_queue, beam_width);
     }
 
     auto end_chrono = chrono::high_resolution_clock::now();
@@ -1582,101 +1610,136 @@ void find_candidates_among_state_children(State &state, int player_id, std::prio
     find_candidates_among_state_children_count++;
 }
 
-const State &get_best_candidate(std::priority_queue<State, std::vector<State>, CompareState>
-                                    &beam_search_candidates)
+State &get_best_candidate(State *beam_states, int beam_states_length, State *beam_candidates, int beam_candidates_length)
 {
-    while (beam_search_candidates.size() > 1)
-        beam_search_candidates.pop();
+    State *best_state = &beam_states[0];
+    int best_heuristic = get_heuristic(*best_state);
 
-    return beam_search_candidates.top();
+    for (int i = 1; i < beam_states_length; i++)
+    {
+        State &state = beam_states[i];
+        if (get_heuristic(state) > best_heuristic)
+        {
+            best_heuristic = get_heuristic(state);
+            best_state = &state;
+        }
+    }
+
+    for (int i = 0; i < beam_candidates_length; i++)
+    {
+        State &state = beam_candidates[i];
+        if (get_heuristic(state) > best_heuristic)
+        {
+            best_heuristic = get_heuristic(state);
+            best_state = &state;
+        }
+    }
+
+    return *best_state;
 }
 
 MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam_width, int maximum_microseconds, auto start_turn_chrono)
 {
     fprintf(stderr, "Starting beam_search: player_id=%d, depth_max=%d, beam_width=%d, max_time_us=%d\n", player_id, depth_max, beam_width, maximum_microseconds);
     beam_search_visited_states_count = 0;
-    beam_search_depth = 1;
+    beam_search_depth = 0;
 
-    std::vector<State> storage;
+    State *beam_states_1 = new State[beam_width * MAX_PLAYER_MOVE_SETS];
+    State *beam_states_2 = new State[beam_width * MAX_PLAYER_MOVE_SETS];
+    State *beam_states;
+    State *beam_candidates;
+    int beam_states_length = 0;
+    int beam_candidates_length = 1;
+
+    std::vector<State *> storage;
+    std::vector<State *> storage2;
     storage.reserve(beam_width);
+    storage2.reserve(beam_width);
+    std::priority_queue<State *, std::vector<State *>, CompareState> beam_queue_1(CompareState(), std::move(storage));
+    std::priority_queue<State *, std::vector<State *>, CompareState> beam_queue_2(CompareState(), std::move(storage2));
+    std::priority_queue<State *, std::vector<State *>, CompareState> *beam_depth_queue;
+    std::priority_queue<State *, std::vector<State *>, CompareState> *beam_candidates_queue;
 
-    std::priority_queue<State, std::vector<State>, CompareState> beam_search_candidates(CompareState(), std::move(storage));
-
-    // Initialize the candidates list with the initial state children
-    find_candidates_among_state_children(initial_state, player_id, beam_search_candidates, beam_width);
-
-    // Create and initialize the beam search states with the initial state children
-    // We absolutely not want the initial_state in the beam search states, because it has no moveset to return
-    std::vector<State> beam_search_states;
-    beam_search_states.reserve(beam_width);
-
-    fprintf(stderr, "Initialized beam_search_states with state children at depth=%d\n", beam_search_depth);
+    // Initialize the beam depth queue with the initial state children
+    memcpy(&beam_states_1[0], &initial_state, sizeof(State));
+    beam_queue_1.push(&beam_states_1[0]);
+    bool use_second_queue_as_candidates = true;
 
     while (!has_exceeded_time_limit(start_turn_chrono, maximum_microseconds) && beam_search_depth < depth_max)
     {
         beam_search_depth++;
         fprintf(stderr, "Start beam search depth %d (%ld ym remaining)\n", beam_search_depth, maximum_microseconds - chrono::duration_cast<chrono::microseconds>(chrono::high_resolution_clock::now() - start_turn_chrono).count());
 
-        move_candidates_in_beam_states(beam_search_states, beam_search_candidates);
-
-        for (State &state : beam_search_states)
+        if (use_second_queue_as_candidates)
         {
+            beam_states = beam_states_1;
+            beam_candidates = beam_states_2;
+            beam_depth_queue = &beam_queue_1;
+            beam_candidates_queue = &beam_queue_2;
+        }
+        else
+        {
+            beam_states = beam_states_2;
+            beam_candidates = beam_states_1;
+            beam_depth_queue = &beam_queue_2;
+            beam_candidates_queue = &beam_queue_1;
+        }
+        use_second_queue_as_candidates = !use_second_queue_as_candidates;
+
+        beam_states_length = beam_candidates_length;
+        beam_candidates_length = 0;
+        // fprintf(stderr, "beam_search: Depth %d start with %d states in queue, and %d states took from the previous buffer\n", beam_search_depth, beam_depth_queue->size(), beam_states_length);
+        // for (int i = 0; i < beam_depth_queue->size(); i++)
+        // {
+        //     fprintf(stderr, "State %p: beam_candidates[%d].turn=%d, beam_candidates[%d].first_depth_moveset.size()=%d\n", &beam_states[i], i, beam_states[i].turn, i, beam_states[i].first_depth_moveset.move_count);
+        // }
+        while (!beam_depth_queue->empty())
+        {
+            State *state_ptr = beam_depth_queue->top();
+            beam_depth_queue->pop();
+
+            State &state = *state_ptr;
+
+            // if (beam_search_depth > 1 && get_moveset_move_count(get_first_depth_moveset(state)) == 0)
+            // {
+            //     fprintf(stderr, "beam_search: Depth %d: No moveset found for state %p\n", beam_search_depth, &state);
+            //     exit(0);
+            // }
+            // fprintf(stderr, "beam_search depth %d: Pop state from the %d available\n", beam_search_depth, beam_states_length);
+            // print_map(state);
+
             // Skip ended states, but consider keeping it in candidates state
             if (is_game_ended(state))
             {
                 // fprintf(stderr, "Game ended, considering state as candidate\n");
-                consider_state_to_be_candidate(state, get_first_depth_moveset(state), beam_search_candidates, beam_width);
+                consider_state_to_be_candidate(state_ptr, get_first_depth_moveset(state), beam_candidates_queue, beam_width);
                 continue;
             }
 
-            find_candidates_among_state_children(state, player_id, beam_search_candidates, beam_width);
+            find_candidates_among_state_children(state, player_id, beam_candidates, &beam_candidates_length, beam_candidates_queue, beam_width);
 
             if (has_exceeded_time_limit(start_turn_chrono, maximum_microseconds))
             {
-                fprintf(stderr, "Time limit exceeded during moveset generation. beam_search_states.size()=%d, beam_search_candidates.size()=%d\n", (int)beam_search_states.size(), (int)beam_search_candidates.size());
+                fprintf(stderr, "Time limit exceeded during moveset generation. beam_states_length=%d, beam_candidates_length=%d\n", beam_states_length, beam_candidates_length);
 
-                State &best_candidate = (State &)get_best_candidate(beam_search_candidates);
-
-                // Heuristic is generated for this player, so higher is better
-                if (get_heuristic(beam_search_states[0]) > get_heuristic(best_candidate))
-                {
-                    fprintf(stderr, "Previous beam search state is better than best candidate: h=%f\n", get_heuristic(beam_search_states[0]));
-
-                    if (is_game_ended(beam_search_states[0]))
-                    {
-                        fprintf(stderr, "========================================================\n");
-                        fprintf(stderr, "Game ended: Turn %d\n", get_turn(beam_search_states[0]));
-                        fprintf(stderr, "Game ended: Remaining energy cells = %d\n", get_energy_count(beam_search_states[0]));
-                        fprintf(stderr, "Game ended: My score = %d\n", count_player_points(beam_search_states[0], map_properties.my_id));
-                        fprintf(stderr, "Game ended: Opponent score = %d\n", count_player_points(beam_search_states[0], map_properties.opp_id));
-                        fprintf(stderr, "Game ended: My losses = %d\n", get_player_losses(beam_search_states[0], map_properties.my_id));
-                        fprintf(stderr, "Game ended: Opponent losses = %d\n", get_player_losses(beam_search_states[0], map_properties.opp_id));
-                        fprintf(stderr, "========================================================\n");
-                    }
-                    return get_first_depth_moveset(beam_search_states[0]);
-                }
-                else
-                {
-                    fprintf(stderr, "Best candidate is better than initial state: h=%f\n", get_heuristic(best_candidate));
-
-                    if (is_game_ended(best_candidate))
-                    {
-                        fprintf(stderr, "========================================================\n");
-                        fprintf(stderr, "Game ended: Turn %d\n", get_turn(best_candidate));
-                        fprintf(stderr, "Game ended: Remaining energy cells = %d\n", get_energy_count(best_candidate));
-                        fprintf(stderr, "Game ended: My score = %d\n", count_player_points(best_candidate, map_properties.my_id));
-                        fprintf(stderr, "Game ended: Opponent score = %d\n", count_player_points(best_candidate, map_properties.opp_id));
-                        fprintf(stderr, "Game ended: My losses = %d\n", get_player_losses(best_candidate, map_properties.my_id));
-                        fprintf(stderr, "Game ended: Opponent losses = %d\n", get_player_losses(best_candidate, map_properties.opp_id));
-                        fprintf(stderr, "========================================================\n");
-                    }
-                    return get_first_depth_moveset(best_candidate);
-                }
+                State &best_candidate = get_best_candidate(beam_states, beam_states_length, beam_candidates, beam_candidates_length);
+                print_moveset(get_first_depth_moveset(best_candidate));
+                print_map(best_candidate);
+                return get_first_depth_moveset(best_candidate);
             }
+
+            // Verify all states have first depth moveset and depth=2
+            // fprintf(stderr, "beam_search: Depth %d end with %d candidates in queue, and %d state took from the buffer\n", beam_search_depth, beam_candidates_queue->size(), beam_candidates_length);
+            // for (int i = 0; i < beam_candidates_length; i++)
+            // {
+            //     fprintf(stderr, "State %p: beam_candidates[%d].turn=%d, beam_candidates[%d].first_depth_moveset.size()=%d\n", &beam_candidates[i], i, beam_candidates[i].turn, i, beam_candidates[i].first_depth_moveset.move_count);
+            // }
         }
     }
 
-    State &best_candidate = (State &)get_best_candidate(beam_search_candidates);
+    State &best_candidate = get_best_candidate(beam_states, beam_states_length, beam_candidates, beam_candidates_length);
+    print_moveset(get_first_depth_moveset(best_candidate));
+    print_map(best_candidate);
     return get_first_depth_moveset(best_candidate);
 }
 
@@ -1886,7 +1949,7 @@ int main()
         MoveSet best_moveset;
         try
         {
-            best_moveset = beam_search(state, map_properties.my_id, 50, 150, 30000, start_turn_chrono);
+            best_moveset = beam_search(state, map_properties.my_id, 20, 150, 30000, start_turn_chrono);
 
             beam_search_execution_count++;
             beam_search_sum_states_visited += beam_search_visited_states_count;
@@ -1923,6 +1986,12 @@ int main()
             exit(1);
         }
         // print_moveset(best_moveset);
+
+        if (get_moveset_move_count(best_moveset) == 0)
+        {
+            fprintf(stderr, "No best moveset found this turn !!!!!\n");
+            exit(0);
+        }
 
         fprintf(stderr, "\nMax depth reached: %d\n", beam_search_depth);
 
@@ -1965,9 +2034,9 @@ int main()
         fprintf(stderr, "evaluate_state() - count : %d\n", evaluate_state_count);
         fprintf(stderr, "evaluate_state() - t/call: %f ys\n", evaluate_state_time / (float)evaluate_state_count);
 
-        fprintf(stderr, "\nmove_candidates_in_beam_states() - time : %d ys\n", move_candidates_in_beam_states_time);
-        fprintf(stderr, "move_candidates_in_beam_states() - count : %d\n", move_candidates_in_beam_states_count);
-        fprintf(stderr, "move_candidates_in_beam_states() - t/call: %f ys\n", move_candidates_in_beam_states_time / (float)move_candidates_in_beam_states_count);
+        // fprintf(stderr, "\nmove_candidates_in_beam_depth_queue() - time : %d ys\n", move_candidates_in_beam_depth_queue_time);
+        // fprintf(stderr, "move_candidates_in_beam_depth_queue() - count : %d\n", move_candidates_in_beam_depth_queue_count);
+        // fprintf(stderr, "move_candidates_in_beam_depth_queue() - t/call: %f ys\n", move_candidates_in_beam_depth_queue_time / (float)move_candidates_in_beam_depth_queue_count);
 
         fprintf(stderr, "\nconsider_state_to_be_candidate() - time : %d ys\n", consider_state_to_be_candidate_time);
         fprintf(stderr, "consider_state_to_be_candidate() - count : %d\n", consider_state_to_be_candidate_count);
@@ -1978,12 +2047,6 @@ int main()
         fprintf(stderr, "find_candidates_among_state_children() - t/call: %f ys\n", find_candidates_among_state_children_time / (float)find_candidates_among_state_children_count);
 
         print_marks(state, best_moveset);
-
-        if (get_moveset_move_count(best_moveset) == 0)
-        {
-            fprintf(stderr, "No best moveset found this turn !!!!!\n");
-            exit(0);
-        }
 
         for (int i = 0; i < get_moveset_move_count(best_moveset); i++)
         {
