@@ -34,7 +34,7 @@
 //   v5.1 - Restore BFS search in heuristic, with new iterative implementation (Now the engine is faster, it could be worth it)
 //   v5.2 - Add maluses when body pieces are out of map
 //          - Align end game heuristics
-//          - Take care of win/lose when there is the same amount of snakes, but different amount of losses
+//          - Take care of win/lose with ex-aequo game points, but different amount of losses
 
 #undef _GLIBCXX_DEBUG
 #pragma GCC optimize("Ofast,unroll-loops,omit-frame-pointer,inline")
@@ -204,6 +204,7 @@ struct State
 {
     int turn;
     bool game_ended;
+    int player_losses[2];
 
     int cells[MAX_CELL_COUNT]; // 0-7: snake_id, 8: CELL_EMPTY, 9: CELL_PLATFORM, 10: CELL_ENERGY
 
@@ -224,6 +225,7 @@ struct State
 
 int get_turn(State &state) { return state.turn; }
 bool is_game_ended(State &state) { return state.game_ended; }
+int get_player_losses(State &state, int player_id) { return state.player_losses[player_id]; }
 int get_energy_count(State &state) { return state.energy_count; }
 int get_cell(State &state, Pos pos) { return state.cells[pos]; }
 Snake &get_snake(State &state, int snake_id) { return state.snakes[snake_id]; }
@@ -237,6 +239,11 @@ MoveSet &get_first_depth_moveset(State &state) { return state.first_depth_movese
 
 void set_turn(State &state, int turn) { state.turn = turn; }
 void set_game_ended(State &state) { state.game_ended = true; }
+void set_player_losses(State &state, int player_id, int loss_count) { state.player_losses[player_id] = loss_count; }
+void add_player_loss(State &state, int player_id, int loss_count)
+{
+    state.player_losses[player_id] += loss_count;
+}
 void set_energy_count(State &state, int count) { state.energy_count = count; }
 void set_cell(State &state, Pos pos, int value) { state.cells[pos] = value; }
 void set_energy(State &state, int index, Pos pos) { state.energies[index] = pos; }
@@ -872,10 +879,12 @@ void apply_snake_collisions(State &state, Snake *colliding_snakes[MAX_SNAKE_COUN
         if (get_snake_body_length(snake) - 1 < 3)
         {
             remove_snake_from_alive_snake_ids(state, get_snake_id(snake), get_snake_player_id(snake));
+            add_player_loss(state, get_snake_player_id(snake), 3);
         }
         else
         {
             remove_snake_head(snake);
+            add_player_loss(state, get_snake_player_id(snake), 1);
         }
     }
 }
@@ -1194,7 +1203,7 @@ int count_player_points(State &state, int player_id)
     return points;
 }
 
-int evaluate_end_states(State &state, int player_points, int opponent_points)
+int evaluate_end_states(State &state, int player_id, int player_points, int opponent_points)
 {
     bool player_win = false;
     bool opponent_win = false;
@@ -1207,12 +1216,20 @@ int evaluate_end_states(State &state, int player_points, int opponent_points)
             player_win = true;
         else if (player_points < opponent_points)
             opponent_win = true;
+        else if (get_player_losses(state, player_id) > get_player_losses(state, get_opponent_id(player_id)))
+            opponent_win = true;
+        else if (get_player_losses(state, player_id) < get_player_losses(state, get_opponent_id(player_id)))
+            player_win = true;
     }
     // Wins by killing enemy snakes
     else if (opponent_points == 0)
         player_win = true;
     else if (player_points == 0)
         opponent_win = true;
+    else if (get_player_losses(state, player_id) > get_player_losses(state, get_opponent_id(player_id)))
+        opponent_win = true;
+    else if (get_player_losses(state, player_id) < get_player_losses(state, get_opponent_id(player_id)))
+        player_win = true;
 
     // End positions stay in beam search states, with different turn count
     // Set a high positive score if we win, weighted by the turn number to prioritize winning sooner than later
@@ -1222,8 +1239,8 @@ int evaluate_end_states(State &state, int player_points, int opponent_points)
     if (opponent_win)
         return -100 * (201 - get_turn(state));
 
-    // TODO: Take care of body loss !
-    return 0; // Draw
+    // Draw
+    return 0;
 }
 
 int evaluate_state_time = 0;
@@ -1246,7 +1263,7 @@ float evaluate_state(State &state, int player_id)
     }
 
     if (is_game_ended(state))
-        return evaluate_end_states(state, player_points, opponent_points);
+        return evaluate_end_states(state, player_id, player_points, opponent_points);
 
     int dist_sum = 0;
     for (int i = 0; i < get_player_alive_snake_count(state, player_id); i++)
@@ -1768,12 +1785,21 @@ int main()
     int turn = 0;
     while (true)
     {
+        // Save internal data before overwrite
+        int turn = state.turn;
+        int player_losses = get_player_losses(state, map_properties.my_id);
+        int opponent_losses = get_player_losses(state, map_properties.opp_id);
+
         // Reset state to initial state before parsing fresh dynamic data
         memcpy(&state, &initial_state, sizeof(state));
-        parse_turn_inputs(state);
 
-        auto start_turn_chrono = chrono::high_resolution_clock::now();
+        // Restore internal data
         set_turn(state, turn);
+        set_player_losses(state, map_properties.my_id, player_losses);
+        set_player_losses(state, map_properties.opp_id, opponent_losses);
+
+        parse_turn_inputs(state);
+        auto start_turn_chrono = chrono::high_resolution_clock::now();
 
         if (turn == 0)
             create_lookup_tables(state);
