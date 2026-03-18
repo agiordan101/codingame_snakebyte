@@ -47,29 +47,28 @@ cg-colosseum battle \
 
 ## TODO
 
-- Tester d'autres heuristic :
-    - Utiliser des ranges/bases pour priorisé les objectif, example :
-        Game result : 100 * w
-        Game point : 10 * p
-        Energy dist: 1 * d
-        Closest ally snake: 0.1 * d
-        Head outside platform: 0.5
-        ...
-    - Ajouter des bonus en fonction de ce qu'il y a autour du snake :
-        - Platform: Bonus weighted par l'idex du PREMIER body qui est sur une platform (Encourage la tête à retrouver des platforms)
-        - Snake allié: Pareil que pour les platforms, mais avec un bonus plus faible
-        - Snake enemy: Pareil que pour les platforms, mais avec un malus
-    - Desactivate energy tracking when : game points diff > remaining energy
-    - Créer une map de distance entre les cases au dessus des platforms et les energies, avec BFS. les cases qui ne sont pas au dessus : -1
-        - Quand la case est plus haut que l'énergie : On prend que X (manhattan ducoup ?)
-    - Tester de remettre un vrai BFS realtime dans l'heuristic
-    - Avoir un BFS avec gravité qui determine si un snake peut ateindre une energy, sinon faire en sorte qu'il se raproche de la queue d'un allié
-    - A faire après le beam search, pour correctement évaluer l'amélioration du ratio temps/précision de l'heuristic : Faire un nouveau DFS qui prends en compte la gravité et son body :
-        On prends l'état actuel
-        On fait bouger que ce snake
-        en v1: On considère une seule fois les cases où la tête est passée
-        en v1: On shift les pos du body ?
-- Collisions :
+Tester d'autres heuristic :
+
+- Utiliser des ranges/bases pour priorisé les objectif, example :
+    Game result : 100 * w
+    Game point : 10 * p
+    Energy dist: 1 * d
+    Closest ally snake: 0.1 * d
+    Head outside platform: 0.5
+    ...
+- Ajouter des bonus en fonction de ce qu'il y a autour du snake :
+    - Platform: Bonus weighted par l'idex du PREMIER body qui est sur une platform (Encourage la tête à retrouver des platforms)
+    - Snake allié: Pareil que pour les platforms, mais avec un bonus plus faible
+    - Snake enemy: Pareil que pour les platforms, mais avec un malus
+- Créer une map de distance entre les cases au dessus des platforms et les energies, avec BFS. les cases qui ne sont pas au dessus : -1
+    - Quand la case est plus haut que l'énergie : On prend que X (manhattan ducoup ?)
+- Avoir un BFS avec gravité qui determine si un snake peut ateindre une energy, sinon faire en sorte qu'il se raproche de la queue d'un allié
+- A faire après le beam search, pour correctement évaluer l'amélioration du ratio temps/précision de l'heuristic : Faire un nouveau DFS qui prends en compte la gravité et son body :
+    On prends l'état actuel
+    On fait bouger que ce snake
+    en v1: On considère une seule fois les cases où la tête est passée
+    en v1: On shift les pos du body ?
+
 
 Algorithm optimisations :
 
@@ -78,8 +77,6 @@ Algorithm optimisations :
 2. bitboards ou compaction ou reduction de la taille de State
 3. Regarder "partial sort buffer"
 4. Réflechir à conserver que des pointeurs avec leur heuristic. Et un State buffer[width] réutilisable
-
-
 
 POinters instead of state copy :
     Short-term minimal change: store pointers (or std::unique_ptr<State>) in your candidate list instead of copying whole State. Alternatively, only push the heuristic + MoveSet first_depth_moveset + a compact representation of the state (e.g., differences). The quickest patch is to store std::shared_ptr<State> or std::unique_ptr<State>.
@@ -146,6 +143,17 @@ MoveSet -> A list of Move
 
 ## History
 
+# v5.2
+
+- Add maluses when body pieces are out of map
+- Align end game heuristics
+- Take care of win/lose with ex-aequo game points, but different amount of losses
+- refacto: Count game points in realtime instead of storing them
+
+League: Gold (max)
+First publication : 83/1950
+Last publication: 74/1950
+
 # v5.1 (Worst)
 
 Restore BFS search in heuristic, with new iterative implementation (Now the engine is faster, it could be worth it)
@@ -162,7 +170,7 @@ Last publication: 80/1950
 
 League: Gold (max)
 First publication : 88/1938
-Last publication: 62/1950
+Last publication: 80/1950
 
 # v4.6
 
