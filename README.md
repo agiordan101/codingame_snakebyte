@@ -47,8 +47,13 @@ cg-colosseum battle \
 
 ## TODO
 
+- Faire attention lorsqu'un snake n'a aucun move :
+    - Recroqueville sur lui même
+    - Bord de map bloqué par un autre
+
 Tester d'autres heuristic :
 
+- Vu que 2 wins ont le même score, il s'en fou de se prendre des murs avant. Sauf que des fois, ca ne se passe pas comme prévu et on lose parce qu'il sest pris des murs
 - Utiliser des ranges/bases pour priorisé les objectif, example :
     Game result : 100 * w
     Game point : 10 * p
@@ -142,6 +147,14 @@ MoveSet -> A list of Move
     - Move best 'beam_width' states from beam_search_candidates to beam_search_states
 
 ## History
+
+# v5.3
+
+Add bonuses depending on the first body index on a platform. The closer to the head, the more bonus
+
+League: Gold (max)
+First publication : 62/2062
+Last publication: -
 
 # v5.2
 
