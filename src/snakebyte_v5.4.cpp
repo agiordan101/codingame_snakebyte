@@ -39,7 +39,9 @@
 //      v5.3 - Add bonuses depending on the first body index on a platform. The closer to the head, the more bonus
 //           - Weight win/lose heuristic by ally player points and turns.
 //      v5.4 - Change Pos type from int (32bits) to int16_t
-//           - Change cell type from int to 'CellType'=int8_t
+//           - Change cell type from int to 'CellType' = u_int8_t
+//           - Downscale State size from 10528 bytes to 3732 bytes and gain 20% more visited states
+//           - Use precomputed struct sizes
 
 #undef _GLIBCXX_DEBUG
 #pragma GCC optimize("Ofast,unroll-loops,omit-frame-pointer,inline")
@@ -69,6 +71,9 @@
 using namespace std;
 
 using Pos = int16_t; // 1 dimension coordinate in map (y * width + x)
+
+constexpr size_t SIZE_OF_POS = sizeof(Pos);
+constexpr size_t SIZE_OF_INT = sizeof(int);
 
 /* --- MAPPROPERTIES --- */
 
@@ -137,7 +142,7 @@ void add_body_pos(Snake &snake, Pos pos)
 void remove_snake_head(Snake &snake)
 {
     // Shift all body positions to the left, removing the head pos, and decreasing the body length by 1
-    memmove(&snake.body_pos[0], &snake.body_pos[1], sizeof(Pos) * (--snake.body_length));
+    memmove(&snake.body_pos[0], &snake.body_pos[1], SIZE_OF_POS * (--snake.body_length));
 }
 void reset_snake_length(Snake &snake) { snake.body_length = 0; }
 
@@ -148,7 +153,7 @@ void initialize_snake_data(
 {
     snake.id = snake_id;
     snake.player_id = player_id;
-    bzero(snake.body_pos, sizeof(Pos) * MAX_SNAKE_SIZE);
+    bzero(snake.body_pos, SIZE_OF_POS * MAX_SNAKE_SIZE);
     snake.body_length = 3;
 }
 
@@ -230,6 +235,8 @@ struct State
     MoveSet first_depth_moveset;
 };
 
+constexpr size_t SIZE_OF_STATE = sizeof(State);
+
 int get_turn(State &state) { return state.turn; }
 bool is_game_ended(State &state) { return state.game_ended; }
 int get_player_losses(State &state, int player_id) { return state.player_losses[player_id]; }
@@ -294,7 +301,7 @@ void remove_snake_from_alive_snake_ids(State &state, int snake_id, int player_id
             if (i + 1 < get_alive_snake_count(state))
             {
                 // Remove the snake id from alive_snake_ids by shifting the rest of the array
-                memmove(&state.alive_snake_ids[i], &state.alive_snake_ids[i + 1], sizeof(int) * (get_alive_snake_count(state) - i - 1));
+                memmove(&state.alive_snake_ids[i], &state.alive_snake_ids[i + 1], SIZE_OF_INT * (get_alive_snake_count(state) - i - 1));
             }
             state.alive_snake_count--;
             break;
@@ -309,7 +316,7 @@ void remove_snake_from_alive_snake_ids(State &state, int snake_id, int player_id
             if (i + 1 < get_player_alive_snake_count(state, player_id))
             {
                 // Remove the snake id from alive_snake_ids by shifting the rest of the array
-                memmove(&state.player_alive_snake_ids[player_id][i], &state.player_alive_snake_ids[player_id][i + 1], sizeof(int) * (get_player_alive_snake_count(state, player_id) - i - 1));
+                memmove(&state.player_alive_snake_ids[player_id][i], &state.player_alive_snake_ids[player_id][i + 1], SIZE_OF_INT * (get_player_alive_snake_count(state, player_id) - i - 1));
             }
             state.player_alive_snake_count[player_id]--;
             return;
@@ -323,7 +330,7 @@ void remove_energy(State &state, Pos energy)
         if (get_energy(state, i) == energy)
         {
             if (i + 1 < state.energy_count)
-                memmove(&state.energies[i], &state.energies[i + 1], sizeof(Pos) * (state.energy_count - i - 1));
+                memmove(&state.energies[i], &state.energies[i + 1], SIZE_OF_POS * (state.energy_count - i - 1));
             state.energy_count--;
             return;
         }
@@ -336,7 +343,7 @@ void revert_last_move(State &last_state, State &state)
 {
     auto start_chrono = chrono::high_resolution_clock::now();
 
-    memcpy(&state, &last_state, sizeof(State));
+    memcpy(&state, &last_state, SIZE_OF_STATE);
 
     auto end_chrono = chrono::high_resolution_clock::now();
     revert_last_move_time += chrono::duration_cast<chrono::microseconds>(end_chrono - start_chrono).count();
@@ -797,7 +804,7 @@ void apply_move(State &state, Snake &snake, Move &move, Pos eaten_energies[MAX_S
     }
 
     // Move the body positions (memmove because source and dest overlap)
-    memmove(&snake.body_pos[1], &snake.body_pos[0], sizeof(Pos) * body_length_to_move);
+    memmove(&snake.body_pos[1], &snake.body_pos[0], SIZE_OF_POS * body_length_to_move);
 
     // Assign a new position to the head
     set_snake_body_pos(snake, 0, new_head_pos);
@@ -1433,7 +1440,7 @@ MoveSet choose_best_snake_moves(State &state, int player_id)
             // Still include other player snake moves already selected, to not generate dump movesets
             MoveSet turn_moveset = merge_movesets(best_snake_moves, snake_moveset);
 
-            memcpy(&next_state, &state, sizeof(State));
+            memcpy(&next_state, &state, SIZE_OF_STATE);
             apply_moveset(next_state, turn_moveset);
 
             float evaluation = evaluate_state(next_state, player_id);
@@ -1566,7 +1573,7 @@ void find_candidates_among_state_children(State &state, int player_id, std::prio
     int ally_moveset_count = generate_player_movesets(state, player_id, ally_movesets);
 
     State next_state;
-    memcpy(&next_state, &state, sizeof(State));
+    memcpy(&next_state, &state, SIZE_OF_STATE);
 
     for (int i = 0; i < ally_moveset_count; i++)
     {
@@ -1851,18 +1858,18 @@ int main()
     signal(SIGFPE, signal_handler);  // Floating point exception
 
     State initial_state;
-    bzero(&initial_state, sizeof(initial_state));
+    bzero(&initial_state, SIZE_OF_STATE);
     parse_initial_inputs(initial_state);
 
     // Log struct size
-    fprintf(stderr, "State size: %zu bytes\n", sizeof(State));
+    fprintf(stderr, "State size: %zu bytes\n", SIZE_OF_STATE);
     fprintf(stderr, "Snake size: %zu bytes\n", sizeof(Snake));
     fprintf(stderr, "MoveSet size: %zu bytes\n", sizeof(MoveSet));
     fprintf(stderr, "Move size: %zu bytes\n", sizeof(Move));
 
     // Save initial state for resetting cells each turn
     State state;
-    memcpy(&state, &initial_state, sizeof(state));
+    memcpy(&state, &initial_state, SIZE_OF_STATE);
     while (true)
     {
         // Save internal data before overwrite
@@ -1871,7 +1878,7 @@ int main()
         int opponent_losses = get_player_losses(state, map_properties.opp_id);
 
         // Reset state to initial state before parsing fresh dynamic data
-        memcpy(&state, &initial_state, sizeof(state));
+        memcpy(&state, &initial_state, SIZE_OF_STATE);
 
         // Restore internal data
         set_turn(state, turn);
