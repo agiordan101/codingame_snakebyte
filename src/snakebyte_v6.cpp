@@ -1491,14 +1491,13 @@ bool has_exceeded_time_limit(auto &start_chrono, int maximum_microseconds)
 
 int consider_state_to_be_candidate_time = 0;
 int consider_state_to_be_candidate_count = 0;
-void consider_state_to_be_candidate(State *state_addr, MoveSet &last_moveset, std::priority_queue<State *, std::vector<State *>, CompareState> *beam_candidates_queue, int beam_width)
+void consider_state_to_be_candidate(State &state, MoveSet &last_moveset, State *beam_candidates, int *next_candidate_index, std::priority_queue<State *, std::vector<State *>, CompareState> *beam_candidates_queue, int beam_width)
 {
     auto start_chrono = chrono::high_resolution_clock::now();
     beam_search_visited_states_count++;
 
     // fprintf(stderr, "consider_state_to_be_candidate (%p): Candidate queue size: %d\n", (int)beam_candidates_queue->size());
 
-    State &state = *state_addr;
     if (beam_candidates_queue->size() < beam_width)
     {
         // fprintf(stderr, "consider_state_to_be_candidate (%p): Adding state to candidate queue\n", state_addr);
@@ -1524,8 +1523,10 @@ void consider_state_to_be_candidate(State *state_addr, MoveSet &last_moveset, st
             // }
             // print_moveset(last_moveset);
         }
+        State *next_state = &beam_candidates[(*next_candidate_index)++];
+        revert_last_move(state, *next_state);
 
-        beam_candidates_queue->push(state_addr);
+        beam_candidates_queue->push(next_state);
     }
     // Save the new promising state if it's better than the current "worst best score"
     else if (get_heuristic(state) > get_heuristic((State &)beam_candidates_queue->top()))
@@ -1534,8 +1535,11 @@ void consider_state_to_be_candidate(State *state_addr, MoveSet &last_moveset, st
         if (beam_search_depth == 1)
             set_first_depth_moveset(state, last_moveset);
 
-        beam_candidates_queue->pop();            // Remove the worst state
-        beam_candidates_queue->push(state_addr); // Add the new state
+        State *next_state = beam_candidates_queue->top();
+        revert_last_move(state, *next_state);
+
+        beam_candidates_queue->pop();             // Remove the worst state
+        beam_candidates_queue->push(next_state); // Add the new state
     }
     // else
     // {
@@ -1571,14 +1575,10 @@ void find_candidates_among_state_children(State &state, int player_id, State *be
     //     print_map(state);
     //     exit(0);
     // }
-    // Store the LOCAL starting index to reduce cache misses
-    int local_start_index = *next_candidate_index;
+    State next_state;
 
     for (int i = 0; i < ally_moveset_count; i++)
     {
-        State *next_state_addr = &beam_candidates[local_start_index + i];
-
-        State &next_state = *next_state_addr;
         revert_last_move(state, next_state);
 
         // Preserve the first depth moveset from parent
@@ -1599,10 +1599,8 @@ void find_candidates_among_state_children(State &state, int player_id, State *be
         float heuristic = evaluate_state(next_state, player_id);
         set_heuristic(next_state, heuristic);
 
-        consider_state_to_be_candidate(next_state_addr, ally_movesets[i], beam_candidates_queue, beam_width);
+        consider_state_to_be_candidate(next_state, ally_movesets[i], beam_candidates, next_candidate_index, beam_candidates_queue, beam_width);
     }
-
-    *next_candidate_index += ally_moveset_count;
 
     auto end_chrono = chrono::high_resolution_clock::now();
     find_candidates_among_state_children_time += chrono::duration_cast<chrono::microseconds>(end_chrono - start_chrono).count();
@@ -1651,8 +1649,8 @@ MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam
     beam_search_visited_states_count = 0;
     beam_search_depth = 0;
 
-    State *beam_states_1 = new State[beam_width * MAX_PLAYER_MOVE_SETS];
-    State *beam_states_2 = new State[beam_width * MAX_PLAYER_MOVE_SETS];
+    static State *beam_states_1 = new State[beam_width];
+    static State *beam_states_2 = new State[beam_width];
     State *beam_states;
     State *beam_candidates;
     // int beam_states_length = 0;
@@ -1719,7 +1717,7 @@ MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam
             if (is_game_ended(state))
             {
                 // fprintf(stderr, "Game ended, considering state as candidate\n");
-                consider_state_to_be_candidate(state_ptr, get_first_depth_moveset(state), beam_candidates_queue, beam_width);
+                consider_state_to_be_candidate(state, get_first_depth_moveset(state), beam_candidates, &beam_candidates_length, beam_candidates_queue, beam_width);
                 continue;
             }
 

@@ -47,6 +47,10 @@ cg-colosseum battle \
 
 ## TODO
 
+- Refaire lalgo de base avec des mega buffer classic, partial sort avec des indices int4 au lieu de State
+
+- Alléger la data structure de State avec des int4 par exemple
+
 - Faire attention lorsqu'un snake n'a aucun move :
     - Recroqueville sur lui même
     - Bord de map bloqué par un autre
