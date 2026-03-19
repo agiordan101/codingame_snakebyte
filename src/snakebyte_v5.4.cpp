@@ -38,6 +38,8 @@
 //           - refacto: Count game points in realtime instead of storing them
 //      v5.3 - Add bonuses depending on the first body index on a platform. The closer to the head, the more bonus
 //           - Weight win/lose heuristic by ally player points and turns.
+//      v5.4 - Change Pos type from int (32bits) to int16_t
+//           - Change cell type from int to 'CellType'=int8_t
 
 #undef _GLIBCXX_DEBUG
 #pragma GCC optimize("Ofast,unroll-loops,omit-frame-pointer,inline")
@@ -66,7 +68,7 @@
 
 using namespace std;
 
-using Pos = int; // 1 dimension coordinate in map (y * width + x)
+using Pos = int16_t; // 1 dimension coordinate in map (y * width + x)
 
 /* --- MAPPROPERTIES --- */
 
@@ -92,10 +94,10 @@ static MapProperties map_properties;
 
 /* --- POS --- */
 
-constexpr int NORTH_POS_OFFSET = -MAX_WIDTH;
-constexpr int WEST_POS_OFFSET = -1;
-constexpr int EAST_POS_OFFSET = 1;
-constexpr int SOUTH_POS_OFFSET = MAX_WIDTH;
+constexpr Pos NORTH_POS_OFFSET = -MAX_WIDTH;
+constexpr Pos WEST_POS_OFFSET = -1;
+constexpr Pos EAST_POS_OFFSET = 1;
+constexpr Pos SOUTH_POS_OFFSET = MAX_WIDTH;
 
 Pos get_pos(int x, int y) { return y * MAX_WIDTH + x; }
 Pos get_pos_from_map_coord(int x, int y) { return (y + MAP_PADDING) * MAX_WIDTH + (x + MAP_PADDING); }
@@ -199,9 +201,11 @@ void print_moveset(MoveSet moveset)
 
 /* --- STATE --- */
 
-constexpr int CELL_EMPTY = 8;
-constexpr int CELL_PLATFORM = 9;
-constexpr int CELL_ENERGY = 10;
+using CellType = int8_t; // 0-7: snake_id, 8: CELL_EMPTY, 9: CELL_PLATFORM, 10: CELL_ENERGY
+
+constexpr CellType CELL_EMPTY = 8;
+constexpr CellType CELL_PLATFORM = 9;
+constexpr CellType CELL_ENERGY = 10;
 
 struct State
 {
@@ -209,7 +213,7 @@ struct State
     bool game_ended;
     int player_losses[2];
 
-    int cells[MAX_CELL_COUNT]; // 0-7: snake_id, 8: CELL_EMPTY, 9: CELL_PLATFORM, 10: CELL_ENERGY
+    CellType cells[MAX_CELL_COUNT]; // 0-7: snake_id, 8: CELL_EMPTY, 9: CELL_PLATFORM, 10: CELL_ENERGY
 
     Snake snakes[MAX_SNAKE_COUNT]; // 0-7: snakes
 
@@ -230,7 +234,7 @@ int get_turn(State &state) { return state.turn; }
 bool is_game_ended(State &state) { return state.game_ended; }
 int get_player_losses(State &state, int player_id) { return state.player_losses[player_id]; }
 int get_energy_count(State &state) { return state.energy_count; }
-int get_cell(State &state, Pos pos) { return state.cells[pos]; }
+CellType get_cell(State &state, Pos pos) { return state.cells[pos]; }
 Snake &get_snake(State &state, int snake_id) { return state.snakes[snake_id]; }
 int get_player_alive_snake_count(State &state, int player_id) { return state.player_alive_snake_count[player_id]; }
 int get_player_alive_snake_id(State &state, int player_id, int index) { return state.player_alive_snake_ids[player_id][index]; }
@@ -248,7 +252,7 @@ void add_player_loss(State &state, int player_id, int loss_count)
     state.player_losses[player_id] += loss_count;
 }
 void set_energy_count(State &state, int count) { state.energy_count = count; }
-void set_cell(State &state, Pos pos, int value) { state.cells[pos] = value; }
+void set_cell(State &state, Pos pos, CellType value) { state.cells[pos] = value; }
 void set_energy(State &state, int index, Pos pos) { state.energies[index] = pos; }
 void set_heuristic(State &state, float heuristic) { state.heuristic = heuristic; }
 void set_first_depth_moveset(State &state, MoveSet &moveset) { state.first_depth_moveset = moveset; }
@@ -370,7 +374,7 @@ void print_cells(State &state, string title = "")
         {
             // Print emojis
             Pos pos = get_pos(x, y);
-            int cell = get_cell(state, pos);
+            CellType cell = get_cell(state, pos);
             if (cell == CELL_EMPTY)
                 fprintf(stderr, "⬜");
             else if (cell == CELL_PLATFORM)
@@ -379,7 +383,7 @@ void print_cells(State &state, string title = "")
                 fprintf(stderr, "🟨");
             else
             {
-                Snake &snake = get_snake(state, cell);
+                Snake &snake = get_snake(state, (int)cell);
                 if (get_snake_player_id(snake) == map_properties.my_id)
                     fprintf(stderr, "🐍");
                 else
@@ -400,7 +404,7 @@ void print_map(State &state, string title = "")
         {
             // Print emojis
             Pos pos = get_pos_from_map_coord(x, y);
-            int cell = get_cell(state, pos);
+            CellType cell = get_cell(state, pos);
             if (cell == CELL_EMPTY)
                 fprintf(stderr, "⬜");
             else if (cell == CELL_PLATFORM)
@@ -409,7 +413,7 @@ void print_map(State &state, string title = "")
                 fprintf(stderr, "🟨");
             else
             {
-                Snake &snake = get_snake(state, cell);
+                Snake &snake = get_snake(state, (int)cell);
                 if (get_snake_player_id(snake) == map_properties.my_id)
                     fprintf(stderr, "🐍");
                 else
@@ -429,7 +433,7 @@ void print_map_bfs_distances(State &state)
         {
             // Print emojis
             Pos pos = get_pos_from_map_coord(x, y);
-            int cell = get_cell(state, pos);
+            CellType cell = get_cell(state, pos);
             if (cell == CELL_EMPTY)
             {
                 int dist = find_closest_energy_cell_bfs(state, pos, closest);
@@ -545,7 +549,7 @@ void print_bfs_distances_per_energy(State &state)
             for (int x = 0; x < map_properties.width; x++)
             {
                 Pos pos = get_pos_from_map_coord(x, y);
-                int cell = get_cell(state, pos);
+                CellType cell = get_cell(state, pos);
 
                 if (cell == CELL_PLATFORM)
                     fprintf(stderr, "#  "); // Platform
@@ -584,7 +588,7 @@ void print_map_of_closest_energy_distances(State &state)
         for (int x = 0; x < map_properties.width; x++)
         {
             Pos pos = get_pos_from_map_coord(x, y);
-            int cell = get_cell(state, pos);
+            CellType cell = get_cell(state, pos);
 
             if (cell == CELL_PLATFORM)
                 fprintf(stderr, "#  "); // Platform
@@ -613,9 +617,9 @@ void create_lookup_tables(State &state)
 
 /* --- GAME PHYSICS - GENERATION --- */
 
-bool is_cell_solid(int cell, int snake_id)
+bool is_cell_solid(CellType cell, int snake_id)
 {
-    return cell != snake_id && cell != CELL_EMPTY;
+    return cell != (CellType)snake_id && cell != CELL_EMPTY;
 }
 
 int generate_snake_moves(Snake &snake, Pos moves[3])
@@ -833,7 +837,7 @@ int find_snake_collisions(State &state, Snake *colliding_snakes[MAX_SNAKE_COUNT]
         Snake &snake = get_snake(state, snake_id);
         Pos snake_head_pos = get_snake_head_pos(snake);
 
-        int head_cell = get_cell(state, snake_head_pos);
+        CellType head_cell = get_cell(state, snake_head_pos);
         if (head_cell == CELL_PLATFORM)
         {
             colliding_snakes[colliding_snake_count++] = &snake;
@@ -867,7 +871,7 @@ int find_snake_collisions(State &state, Snake *colliding_snakes[MAX_SNAKE_COUNT]
 
         // Snake head has always a new position, except when colliding with platform or snakes
         if (!collide)
-            set_cell(state, snake_head_pos, snake_id);
+            set_cell(state, snake_head_pos, (CellType)snake_id);
     }
 
     return colliding_snake_count;
@@ -929,10 +933,10 @@ bool apply_snake_gravity(State &state, Snake &snake)
         {
             Pos pos = get_snake_body_pos(snake, i);
             Pos pos_below = get_south_pos(pos);
-            int cell_below = get_cell(state, pos_below);
+            CellType cell_below = get_cell(state, pos_below);
 
             // fprintf(stderr, "Snake %d: Is cell %d solid? (Pos=%d)\n", snake_id, cell_below, pos);
-            if (is_cell_solid(cell_below, snake_id))
+            if (is_cell_solid(cell_below, (CellType)snake_id))
                 return false;
 
             min_y = min(min_y, get_y(pos_below));
@@ -955,7 +959,7 @@ bool apply_snake_gravity(State &state, Snake &snake)
         // And set it one cell below
         for (int i = 0; i < snake_body_length; i++)
         {
-            set_cell(state, new_snake_positions[i], snake_id);
+            set_cell(state, new_snake_positions[i], (CellType)snake_id);
             set_snake_body_pos(snake, i, new_snake_positions[i]);
         }
 
@@ -1062,8 +1066,7 @@ int find_closest_energy_cell_recursive(State &state, queue<pair<Pos, int>> &bfs_
         // New valid cell if : In map & Not visited yet & Empty
         if (!neighbor_out_of_bounds[i] && !visited[neighbors[i]])
         {
-
-            int neighbor = get_cell(state, neighbors[i]);
+            CellType neighbor = get_cell(state, neighbors[i]);
 
             // Check if the position is an energy cell
             if (neighbor == CELL_ENERGY)
@@ -1758,7 +1761,7 @@ void parse_snakebot(State &state, Snake &snake, int snakebotId, string bodyStr)
         if (parse_pos_from_segment(segment, body_pos))
         {
             add_body_pos(snake, body_pos);
-            set_cell(state, body_pos, snakebotId);
+            set_cell(state, body_pos, (CellType)snakebotId);
         }
 
         start = end + 1;
@@ -1771,7 +1774,7 @@ void parse_snakebot(State &state, Snake &snake, int snakebotId, string bodyStr)
     if (parse_pos_from_segment(lastSegment, body_pos))
     {
         add_body_pos(snake, body_pos);
-        set_cell(state, body_pos, snakebotId);
+        set_cell(state, body_pos, (CellType)snakebotId);
     }
 }
 
