@@ -1571,15 +1571,12 @@ void find_candidates_among_state_children(State &state, int player_id, State *be
     //     print_map(state);
     //     exit(0);
     // }
+    // Store the LOCAL starting index to reduce cache misses
+    int local_start_index = *next_candidate_index;
 
     for (int i = 0; i < ally_moveset_count; i++)
     {
-        // print_moveset(ally_movesets[i]);
-
-        State *next_state_addr = &beam_candidates[*next_candidate_index];
-        (*next_candidate_index)++;
-
-        // fprintf(stderr, "find_candidates_among_state_children (%p): Pick new state from buffer index %d: %p\n", &state, *next_candidate_index - 1, next_state_addr);
+        State *next_state_addr = &beam_candidates[local_start_index + i];
 
         State &next_state = *next_state_addr;
         revert_last_move(state, next_state);
@@ -1605,36 +1602,46 @@ void find_candidates_among_state_children(State &state, int player_id, State *be
         consider_state_to_be_candidate(next_state_addr, ally_movesets[i], beam_candidates_queue, beam_width);
     }
 
+    *next_candidate_index += ally_moveset_count;
+
     auto end_chrono = chrono::high_resolution_clock::now();
     find_candidates_among_state_children_time += chrono::duration_cast<chrono::microseconds>(end_chrono - start_chrono).count();
     find_candidates_among_state_children_count++;
 }
 
-State &get_best_candidate(State *beam_states, int beam_states_length, State *beam_candidates, int beam_candidates_length)
+State &get_best_candidate(std::priority_queue<State *, std::vector<State *>, CompareState> *beam_depth_queue, std::priority_queue<State *, std::vector<State *>, CompareState> *beam_candidates_queue)
 {
-    State *best_state = &beam_states[0];
-    int best_heuristic = get_heuristic(*best_state);
+    State *best_state = beam_candidates_queue->top();
+    float best_heuristic = get_heuristic(*best_state);
 
-    for (int i = 1; i < beam_states_length; i++)
+    // fprintf(stderr, "get_best_candidate: Begin with best_heuristic=%f\n", best_heuristic);
+    while (!beam_candidates_queue->empty())
     {
-        State &state = beam_states[i];
+        State &state = *beam_candidates_queue->top();
+        beam_candidates_queue->pop();
+
         if (get_heuristic(state) > best_heuristic)
         {
             best_heuristic = get_heuristic(state);
             best_state = &state;
+            // fprintf(stderr, "get_best_candidate: beam_candidates_queue: New best_heuristic=%f\n", best_heuristic);
         }
     }
 
-    for (int i = 0; i < beam_candidates_length; i++)
+    while (!beam_depth_queue->empty())
     {
-        State &state = beam_candidates[i];
+        State &state = *beam_depth_queue->top();
+        beam_depth_queue->pop();
+
         if (get_heuristic(state) > best_heuristic)
         {
             best_heuristic = get_heuristic(state);
             best_state = &state;
+            // fprintf(stderr, "get_best_candidate: beam_depth_queue: New best_heuristic=%f\n", best_heuristic);
         }
     }
 
+    // fprintf(stderr, "get_best_candidate: End with best_heuristic=%f\n", best_heuristic);
     return *best_state;
 }
 
@@ -1648,7 +1655,7 @@ MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam
     State *beam_states_2 = new State[beam_width * MAX_PLAYER_MOVE_SETS];
     State *beam_states;
     State *beam_candidates;
-    int beam_states_length = 0;
+    // int beam_states_length = 0;
     int beam_candidates_length = 1;
 
     std::vector<State *> storage;
@@ -1686,7 +1693,7 @@ MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam
         }
         use_second_queue_as_candidates = !use_second_queue_as_candidates;
 
-        beam_states_length = beam_candidates_length;
+        // beam_states_length = beam_candidates_length;
         beam_candidates_length = 0;
         // fprintf(stderr, "beam_search: Depth %d start with %d states in queue, and %d states took from the previous buffer\n", beam_search_depth, beam_depth_queue->size(), beam_states_length);
         // for (int i = 0; i < beam_depth_queue->size(); i++)
@@ -1720,11 +1727,13 @@ MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam
 
             if (has_exceeded_time_limit(start_turn_chrono, maximum_microseconds))
             {
-                fprintf(stderr, "Time limit exceeded during moveset generation. beam_states_length=%d, beam_candidates_length=%d\n", beam_states_length, beam_candidates_length);
+                fprintf(stderr, "Time limit exceeded during moveset generation: beam_candidates_length=%d\n", beam_candidates_length);
+                fprintf(stderr, "beam_search: Depth %d end with %d states in queue\n", beam_search_depth, beam_depth_queue->size());
+                fprintf(stderr, "beam_search: Depth %d end with %d candidates in queue, and %d state took from the buffer\n", beam_search_depth, beam_candidates_queue->size(), beam_candidates_length);
 
-                State &best_candidate = get_best_candidate(beam_states, beam_states_length, beam_candidates, beam_candidates_length);
+                State &best_candidate = get_best_candidate(beam_depth_queue, beam_candidates_queue);
                 print_moveset(get_first_depth_moveset(best_candidate));
-                print_map(best_candidate);
+                // print_map(best_candidate);
                 return get_first_depth_moveset(best_candidate);
             }
 
@@ -1737,9 +1746,11 @@ MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam
         }
     }
 
-    State &best_candidate = get_best_candidate(beam_states, beam_states_length, beam_candidates, beam_candidates_length);
+    fprintf(stderr, "beam_search: Depth %d end with %d candidates in queue, and %d state took from the buffer\n", beam_search_depth, beam_candidates_queue->size(), beam_candidates_length);
+
+    State &best_candidate = get_best_candidate(beam_depth_queue, beam_candidates_queue);
     print_moveset(get_first_depth_moveset(best_candidate));
-    print_map(best_candidate);
+    // print_map(best_candidate);
     return get_first_depth_moveset(best_candidate);
 }
 
@@ -1949,7 +1960,7 @@ int main()
         MoveSet best_moveset;
         try
         {
-            best_moveset = beam_search(state, map_properties.my_id, 20, 150, 30000, start_turn_chrono);
+            best_moveset = beam_search(state, map_properties.my_id, 50, 150, 30000, start_turn_chrono);
 
             beam_search_execution_count++;
             beam_search_sum_states_visited += beam_search_visited_states_count;
@@ -2002,9 +2013,9 @@ int main()
         fprintf(stderr, "choose_best_player_moveset() - count : %d\n", choose_best_player_moveset_count);
         fprintf(stderr, "choose_best_player_moveset() - t/call: %f ys\n", choose_best_player_moveset_time / (float)choose_best_player_moveset_count);
 
-        fprintf(stderr, "\nchoose_best_snake_moves() - time : %d ys\n", choose_best_snake_moves_time);
-        fprintf(stderr, "choose_best_snake_moves() - count : %d\n", choose_best_snake_moves_count);
-        fprintf(stderr, "choose_best_snake_moves() - t/call: %f ys\n", choose_best_snake_moves_time / (float)choose_best_snake_moves_count);
+        // fprintf(stderr, "\nchoose_best_snake_moves() - time : %d ys\n", choose_best_snake_moves_time);
+        // fprintf(stderr, "choose_best_snake_moves() - count : %d\n", choose_best_snake_moves_count);
+        // fprintf(stderr, "choose_best_snake_moves() - t/call: %f ys\n", choose_best_snake_moves_time / (float)choose_best_snake_moves_count);
 
         fprintf(stderr, "\ngenerate_player_movesets() - time : %d ys\n", generate_player_movesets_time);
         fprintf(stderr, "generate_player_movesets() - count : %d\n", generate_player_movesets_count);
