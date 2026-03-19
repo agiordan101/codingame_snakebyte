@@ -47,13 +47,19 @@ cg-colosseum battle \
 
 ## TODO
 
-- Refaire lalgo de base avec des mega buffer classic, partial sort avec des indices int4 au lieu de State
-
 - Alléger la data structure de State avec des int4 par exemple
+- Améliorer le 5.3 pour avoir des (State *) dedans au lieu des states
+
+- Log time merge_movesets
+- Improve merge_movesets
 
 - Faire attention lorsqu'un snake n'a aucun move :
     - Recroqueville sur lui même
     - Bord de map bloqué par un autre
+
+- Refaire lalgo de base avec des mega buffer classic, partial sort avec des indices int4 au lieu de State.
+
+- Propager l'heuristic à travers les depth
 
 Tester d'autres heuristic :
 
@@ -155,8 +161,8 @@ MoveSet -> A list of Move
 Add bonuses depending on the first body index on a platform. The closer to the head, the more bonus
 
 League: Gold (max)
-First publication : 62/2062
-Last publication: 70/2062
+First publication : 60/2062
+Last publication: 60/2062
 
 # v5.2
 
