@@ -1,4 +1,4 @@
-// Version 5.3
+// Version 5.4
 
 // Algorithms :
 //  v1 - Each snakes go to closest Energy cell using BFS
@@ -201,7 +201,7 @@ void print_moveset(MoveSet moveset)
 
 /* --- STATE --- */
 
-using CellType = int8_t; // 0-7: snake_id, 8: CELL_EMPTY, 9: CELL_PLATFORM, 10: CELL_ENERGY
+using CellType = u_int8_t; // 0-7: snake_id, 8: CELL_EMPTY, 9: CELL_PLATFORM, 10: CELL_ENERGY
 
 constexpr CellType CELL_EMPTY = 8;
 constexpr CellType CELL_PLATFORM = 9;
@@ -1332,6 +1332,8 @@ float evaluate_state(State &state, int player_id)
         for (int bi = 0; bi < get_snake_body_length(snake); bi++)
         {
             Pos snake_body_pos = get_snake_body_pos(snake, bi);
+            if (is_south_cell_out_of_bounds(snake_body_pos))
+                continue;
 
             Pos cell_under = get_south_pos(snake_body_pos);
             if (get_cell(state, cell_under) == CELL_PLATFORM)
@@ -1860,6 +1862,7 @@ int main()
 
     // Save initial state for resetting cells each turn
     State state;
+    memcpy(&state, &initial_state, sizeof(state));
     while (true)
     {
         // Save internal data before overwrite
