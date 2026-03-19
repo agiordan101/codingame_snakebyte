@@ -63,7 +63,8 @@ cg-colosseum battle \
 
 Tester d'autres heuristic :
 
-- Pour départager 2 energies qui ont plus ou moins la meme distance, on pourrait rajouter entre [0, 2] un score correspondant à la somme des distance avec toutes les energies
+- Pour que les snakes se spread: Ajouter la score à partir de la somme entre chaque énergie et leur snake le plus proche
+- Pour départager 2 energies qui ont plus ou moins la meme distance, on pourrait rajouter entre [0, 2] un score correspondant à la somme des distance avec toutes les energies -> favorise la direction des groupes de cells
 
 - Ajouter des bonus en fonction de ce qu'il y a autour du snake :
     - Platform: Bonus weighted par l'idex du PREMIER body qui est sur une platform (Encourage la tête à retrouver des platforms)
@@ -155,6 +156,14 @@ MoveSet -> A list of Move
     - Move best 'beam_width' states from beam_search_candidates to beam_search_states
 
 ## History
+
+# v5.4
+
+Add bonuses depending on the first body index on a platform. The closer to the head, the more bonus
+
+League: Gold (max)
+First publication : 90/2062
+Last publication: 90/2062
 
 # v5.3
 
