@@ -1378,14 +1378,14 @@ float evaluate_state(State &state, int player_id)
 
 int choose_best_player_moveset_time = 0;
 int choose_best_player_moveset_count = 0;
-MoveSet choose_best_player_moveset(State &state, int player_id, MoveSet &previous_player_moveset)
+MoveSet choose_best_player_moveset(State &state, int player_id)
 {
     auto start_chrono = chrono::high_resolution_clock::now();
 
     State next_state;
     // fprintf(stderr, "Choosing move set for player %d ...\n", player_id);
 
-    MoveSet movesets[MAX_PLAYER_MOVE_SETS];
+    static MoveSet movesets[MAX_PLAYER_MOVE_SETS];
     int moveset_count = generate_player_movesets(state, player_id, movesets);
 
     MoveSet best_moveset;
@@ -1393,9 +1393,7 @@ MoveSet choose_best_player_moveset(State &state, int player_id, MoveSet &previou
     for (int i = 0; i < moveset_count; i++)
     {
         revert_last_move(state, next_state);
-
-        MoveSet turn_moveset = merge_movesets(previous_player_moveset, movesets[i]);
-        apply_moveset(next_state, turn_moveset);
+        apply_moveset(next_state, movesets[i]);
 
         float evaluation = evaluate_state(next_state, player_id);
         if (best_evaluation < evaluation)
@@ -1543,10 +1541,7 @@ void find_candidates_among_state_children(State &state, int player_id, State *be
 {
     auto start_chrono = chrono::high_resolution_clock::now();
 
-    MoveSet turn_beginning_moveset = {};
-    set_moveset_move_count(turn_beginning_moveset, 0);
-
-    MoveSet opponent_moveset = choose_best_player_moveset(state, get_opponent_id(player_id), turn_beginning_moveset);
+    MoveSet opponent_moveset = choose_best_player_moveset(state, get_opponent_id(player_id));
 
     MoveSet ally_movesets[MAX_PLAYER_MOVE_SETS];
     int ally_moveset_count = generate_player_movesets(state, player_id, ally_movesets);
@@ -1586,7 +1581,7 @@ void find_candidates_among_state_children(State &state, int player_id, State *be
 State &get_best_candidate(State *beam_states, int current_beam_state_index, int beam_states_count, State *beam_candidates, int beam_candidates_count)
 {
     int best_idx = 0;
-    int best_heuristic = get_heuristic(beam_candidates[0]);
+    float best_heuristic = get_heuristic(beam_candidates[0]);
     bool best_in_candidates = true;
 
     // Look which candidate is the best

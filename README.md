@@ -170,7 +170,7 @@ Add bonuses depending on the first body index on a platform. The closer to the h
 
 League: Legend (max)
 First publication : 75/2174
-Last publication: 82/2201
+Last publication: 106/2201
 
 # v5.3
 
