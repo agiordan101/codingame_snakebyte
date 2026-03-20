@@ -53,13 +53,12 @@ cg-colosseum battle \
 - Log time merge_movesets
 - Improve merge_movesets
 
+- Comment c'est possible de générer un move OOB !!
 - Faire attention lorsqu'un snake n'a aucun move :
     - Recroqueville sur lui même
     - Bord de map bloqué par un autre
 
 - Refaire lalgo de base avec des mega buffer classic, partial sort avec des indices int4 au lieu de State.
-
-- Propager l'heuristic à travers les depth
 
 Tester d'autres heuristic :
 
@@ -157,13 +156,21 @@ MoveSet -> A list of Move
 
 ## History
 
+# v5.5
+
+New way to compute beam search heuristic : Add state improvment to the inherited heuristic, weighted by the turn confidence (decreasing with depth)
+
+League: Legend (max)
+First publication : 92/2180
+Last publication: 92/2201
+
 # v5.4
 
 Add bonuses depending on the first body index on a platform. The closer to the head, the more bonus
 
 League: Legend (max)
 First publication : 75/2174
-Last publication: 75/2174
+Last publication: 82/2201
 
 # v5.3
 

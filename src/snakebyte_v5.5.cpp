@@ -71,7 +71,7 @@
 
 using namespace std;
 
-constexpr float BS_EXP_FACTOR = 0.90;
+constexpr float BS_EXP_FACTOR = 0.99;
 constexpr int BS_WIDTH = 150;
 constexpr int BS_MAX_DEPTH = 50;
 constexpr int BS_MAX_TIME = 30000;
