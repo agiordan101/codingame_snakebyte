@@ -43,9 +43,12 @@
 //           - Downscale State size from 10528 bytes to 3732 bytes and gain 20% more visited states
 //           - Use precomputed struct sizes
 //      v5.5 - New way to compute beam search heuristic : Add state improvment to the inherited heuristic, weighted by the turn confidence (decreasing with depth)
+//      v5.6 - Don't generate move on platforms
+//      v5.7 - Fix platform bonuses (was not working)
 //  v6 - Rework beam search state data structures : with 2 priority queues and 2 buffers alternating as beam states and beam candidates (Very bad due to cache misses)
 //  v7 - Rework beam search state data structures : Use 2 static state arrays and nth_element instead of vector and priority_queue
 //      v7.1 - Don't generate move on platforms
+//      v7.2 - Fix platform bonuses (was not working)
 
 #undef _GLIBCXX_DEBUG
 #pragma GCC optimize("Ofast,unroll-loops,omit-frame-pointer,inline")
@@ -1308,8 +1311,8 @@ float evaluate_state(State &state, int player_id)
     if (is_game_ended(state))
         return evaluate_end_states(state, player_id, player_points, opponent_points);
 
-    int dist_sum = 0;
-    int platform_bonuses = 0;
+    float dist_sum = 0;
+    float platform_bonuses = 0;
     for (int i = 0; i < get_player_alive_snake_count(state, player_id); i++)
     {
         int snake_id = get_player_alive_snake_id(state, player_id, i);
@@ -1358,7 +1361,7 @@ float evaluate_state(State &state, int player_id)
                 // So: head on platform = -1.5 dist
                 // Should be >1 to encourage sidesteps over staying at the same position due tu gravity
                 // Should be <2 to discourage sidesteps over going directly onto the energy
-                platform_bonuses += 1.5 * (get_snake_body_length(snake) - bi) / get_snake_body_length(snake);
+                platform_bonuses += 1.5 * (get_snake_body_length(snake) - bi) / (float)get_snake_body_length(snake);
                 break;
             }
         }

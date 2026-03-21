@@ -45,20 +45,40 @@ cg-colosseum battle \
     --p2 ./bin/snakebyte_v4
 ```
 
+To test differents bots in an arena :
+
+```bash
+sh create_arena.sh
+```
+
 ## TODO
 
-- Alléger la data structure de State avec des int4 par exemple
-- Améliorer le 5.3 pour avoir des (State *) dedans au lieu des states
+- Reset mental mec. Prends la meilleur version, regarde ce qui lui manque par rapport aux changements entre les autres versions. And go on.
 
-- Log time merge_movesets
-- Improve merge_movesets
+- gravité prend bien en compte les platform ?
+- Si dans un moveset il n'y a pas de move pour un snake alors il doit continuer tout droit. Important à simuler ? Oui car un snake n'a pas de mouvement quand il est enfermé, sans mouvments il ne se déplace pas et donc n'a pas de collisions !!
+    - Après l'avoir fait, revoir les conditinos de création d'un move :
+        - != OOB
+        - == empty
+        - ou != platform
+        - et == tail
+
+        - Don't generate move on snakes when it's not the tail
+- retry priority queue as chatgpt
+
+- Bug: platform_bonuses integer truncation (line 1311, 1360)
+    int platform_bonuses = 0;  // <-- should be float
+
+- Alléger la data structure de State avec des int8 par exemple
+
+- Find why opponent is taking so long
+    - Log time merge_movesets
+    - Improve merge_movesets
 
 - Comment c'est possible de générer un move OOB !!
 - Faire attention lorsqu'un snake n'a aucun move :
     - Recroqueville sur lui même
     - Bord de map bloqué par un autre
-
-- Refaire lalgo de base avec des mega buffer classic, partial sort avec des indices int4 au lieu de State.
 
 Tester d'autres heuristic :
 
@@ -155,6 +175,14 @@ MoveSet -> A list of Move
     - Move best 'beam_width' states from beam_search_candidates to beam_search_states
 
 ## History
+
+# v5.7
+
+Don't generate move on platforms & Fix platform bonuses (was not working)
+
+League: Legend (max)
+First publication : 92/2180
+Last publication: 92/2201
 
 # v5.5
 
