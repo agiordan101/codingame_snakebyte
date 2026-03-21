@@ -1,4 +1,4 @@
-// Version 5.5
+// Version 5.6
 
 // Algorithms :
 //  v1 - Each snakes go to closest Energy cell using BFS
@@ -642,7 +642,7 @@ bool is_cell_solid(CellType cell, int snake_id)
     return cell != (CellType)snake_id && cell != CELL_EMPTY;
 }
 
-int generate_snake_moves(Snake &snake, Pos moves[3])
+int generate_snake_moves(State &state, Snake &snake, Pos moves[3])
 {
     Pos head_pos = get_snake_head_pos(snake);
 
@@ -663,7 +663,7 @@ int generate_snake_moves(Snake &snake, Pos moves[3])
     for (int i = 0; i < 4; i++)
     {
         // New valid cell if : In map & Not it neck
-        if (!neighbor_out_of_bounds[i] && neighbors[i] != CELL_PLATFORM && neighbors[i] != get_snake_body_pos(snake, 1))
+        if (!neighbor_out_of_bounds[i] && get_cell(state, neighbors[i]) != CELL_PLATFORM && neighbors[i] != get_snake_body_pos(snake, 1))
         {
             moves[move_count++] = neighbors[i];
         }
@@ -691,7 +691,7 @@ int generate_player_movesets(State &state, int player_id, MoveSet movesets[MAX_P
         Snake &snake = get_snake(state, snake_id);
 
         snake_ids[i] = snake_id;
-        snake_move_counts[i] = generate_snake_moves(snake, snake_moves[i]);
+        snake_move_counts[i] = generate_snake_moves(state, snake, snake_moves[i]);
     }
 
     // The idea is to generate all possible combinations of moves for each snake :
@@ -1437,7 +1437,7 @@ MoveSet choose_best_snake_moves(State &state, int player_id)
         Snake &snake = get_snake(state, snake_id);
 
         Pos snake_moves[3];
-        int snake_move_count = generate_snake_moves(snake, snake_moves);
+        int snake_move_count = generate_snake_moves(state, snake, snake_moves);
 
         int best_move_evaluation = -100000;
         Move best_snake_move = {};

@@ -1,4 +1,4 @@
-// Version 5.7
+// Version 5.8
 
 // Algorithms :
 //  v1 - Each snakes go to closest Energy cell using BFS
@@ -45,6 +45,7 @@
 //      v5.5 - New way to compute beam search heuristic : Add state improvment to the inherited heuristic, weighted by the turn confidence (decreasing with depth)
 //      v5.6 - Don't generate move on platforms
 //      v5.7 - Fix platform bonuses (was not working)
+//      v5.8 - If no legal move found, create the default inertia one
 //  v6 - Rework beam search state data structures : with 2 priority queues and 2 buffers alternating as beam states and beam candidates (Very bad due to cache misses)
 //  v7 - Rework beam search state data structures : Use 2 static state arrays and nth_element instead of vector and priority_queue
 //      v7.1 - Don't generate move on platforms
@@ -136,13 +137,15 @@ struct Snake
     int player_id;
     Pos body_pos[MAX_SNAKE_SIZE];
     int body_length;
+    Pos last_head_pos;
 };
 
 int get_snake_id(Snake &snake) { return snake.id; }
 int get_snake_player_id(Snake &snake) { return snake.player_id; }
+int get_snake_body_length(Snake &snake) { return snake.body_length; }
 Pos get_snake_body_pos(Snake &snake, int index) { return snake.body_pos[index]; }
 Pos get_snake_head_pos(Snake &snake) { return get_snake_body_pos(snake, 0); }
-int get_snake_body_length(Snake &snake) { return snake.body_length; }
+Pos get_snake_tail_pos(Snake &snake) { return get_snake_body_pos(snake, get_snake_body_length(snake) - 1); }
 
 void set_snake_body_pos(Snake &snake, int index, Pos pos) { snake.body_pos[index] = pos; }
 void set_snake_body_length(Snake &snake, int length) { snake.body_length = length; }
@@ -644,7 +647,7 @@ bool is_cell_solid(CellType cell, int snake_id)
     return cell != (CellType)snake_id && cell != CELL_EMPTY;
 }
 
-int generate_snake_moves(Snake &snake, Pos moves[3])
+int generate_snake_moves(State &state, Snake &snake, Pos moves[3])
 {
     Pos head_pos = get_snake_head_pos(snake);
 
@@ -664,10 +667,49 @@ int generate_snake_moves(Snake &snake, Pos moves[3])
     int move_count = 0;
     for (int i = 0; i < 4; i++)
     {
-        // New valid cell if : In map & Not it neck
-        if (!neighbor_out_of_bounds[i] && neighbors[i] != CELL_PLATFORM && neighbors[i] != get_snake_body_pos(snake, 1))
+        if (neighbor_out_of_bounds[i])
+            continue;
+
+        CellType cell = get_cell(state, neighbors[i]);
+
+        if (cell == CELL_EMPTY || cell == CELL_ENERGY)
         {
             moves[move_count++] = neighbors[i];
+        }
+        else if (cell != CELL_PLATFORM)
+        {
+            // If not empty, not a platform and not an energy -> Snake
+            // Accept to walk on snake tail only
+            int snake_id = (int)cell;
+            Snake &blocking_snake = get_snake(state, snake_id);
+
+            if (neighbors[i] == get_snake_tail_pos(blocking_snake))
+            {
+                moves[move_count++] = neighbors[i];
+                // fprintf(stderr, "Generate move on snake %d tail: %d %d\n", snake_id, get_map_x(neighbors[i]), get_map_y(neighbors[i]));
+            }
+        }
+    }
+
+    // If no move found, create the default one due to inertia: last turn move direction
+    if (move_count == 0)
+    {
+        Pos offset = head_pos - snake.last_head_pos;
+        Pos inertia_pos = head_pos + offset;
+
+        // fprintf(stderr, "No move found, using inertia: Old Pos %d %d; Head Pos %d %d, Next Pos %d %d\n", get_map_x(snake.last_head_pos), get_map_y(snake.last_head_pos), get_map_x(head_pos), get_map_y(head_pos), get_map_x(inertia_pos), get_map_y(inertia_pos));
+        bool out_of_bounds = false;
+        if (offset == WEST_POS_OFFSET)
+            out_of_bounds = is_west_cell_out_of_bounds(head_pos);
+        else if (offset == EAST_POS_OFFSET)
+            out_of_bounds = is_east_cell_out_of_bounds(head_pos);
+        else if (offset == NORTH_POS_OFFSET)
+            out_of_bounds = is_north_cell_out_of_bounds(head_pos);
+        else if (offset == SOUTH_POS_OFFSET)
+            out_of_bounds = is_south_cell_out_of_bounds(head_pos);
+        if (!out_of_bounds)
+        {
+            moves[move_count++] = inertia_pos;
         }
     }
 
@@ -693,7 +735,7 @@ int generate_player_movesets(State &state, int player_id, MoveSet movesets[MAX_P
         Snake &snake = get_snake(state, snake_id);
 
         snake_ids[i] = snake_id;
-        snake_move_counts[i] = generate_snake_moves(snake, snake_moves[i]);
+        snake_move_counts[i] = generate_snake_moves(state, snake, snake_moves[i]);
     }
 
     // The idea is to generate all possible combinations of moves for each snake :
@@ -795,6 +837,9 @@ MoveSet merge_movesets(MoveSet &moveset1, MoveSet &moveset2)
 
 void apply_move(State &state, Snake &snake, Move &move, Pos eaten_energies[MAX_SNAKE_COUNT], int *eaten_energy_count)
 {
+    // Save old head pos for inertia
+    snake.last_head_pos = get_snake_head_pos(snake);
+
     // fprintf(stderr, "Applying move for snake %d: (%d, %d)\n", get_snake_id(snake), get_map_x(get_move_dst_pos(move)), get_map_y(get_move_dst_pos(move)));
     Pos new_head_pos = get_move_dst_pos(move);
     int body_length_to_move = get_snake_body_length(snake) - 1;
@@ -1439,7 +1484,7 @@ MoveSet choose_best_snake_moves(State &state, int player_id)
         Snake &snake = get_snake(state, snake_id);
 
         Pos snake_moves[3];
-        int snake_move_count = generate_snake_moves(snake, snake_moves);
+        int snake_move_count = generate_snake_moves(state, snake, snake_moves);
 
         int best_move_evaluation = -100000;
         Move best_snake_move = {};
