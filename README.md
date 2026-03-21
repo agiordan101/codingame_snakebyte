@@ -53,18 +53,16 @@ sh create_arena.sh
 
 ## TODO
 
-- Reset mental mec. Prends la meilleur version, regarde ce qui lui manque par rapport aux changements entre les autres versions. And go on.
-
-- Si dans un moveset il n'y a pas de move pour un snake alors il doit continuer tout droit. Important à simuler ? Oui car un snake n'a pas de mouvement quand il est enfermé, sans mouvments il ne se déplace pas et donc n'a pas de collisions !!
-    - Après l'avoir fait, revoir les conditinos de création d'un move :
-        - != OOB
-        - == empty
-        - ou != platform
-        - et == tail
-
-        - Don't generate move on snakes when it's not the tail
-
 - Alléger la data structure de State avec des int8 par exemple
+
+    1. Bitboard pour les cells (gain ~800 bytes) ?
+
+    2. Nibble packing des cells (gain ~833 bytes, plus simple)
+
+        Si les bitboards sont trop complexes, 4 bits par cellule suffisent (11 valeurs < 16) :
+
+        uint8_t cells[MAX_CELL_COUNT / 2 + 1]; // 834 bytes au lieu de 1666
+        // cell[i] = (cells[i/2] >> ((i%1)*4)) & 0xF
 
 - Find why opponent is taking so long
     - Log time merge_movesets
