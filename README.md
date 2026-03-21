@@ -181,8 +181,8 @@ MoveSet -> A list of Move
 Don't generate move on platforms & Fix platform bonuses (was not working)
 
 League: Legend (max)
-First publication : 92/2180
-Last publication: 92/2201
+First publication : 82/2215
+Last publication: 78/2220
 
 # v5.5
 
