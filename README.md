@@ -55,7 +55,6 @@ sh create_arena.sh
 
 - Reset mental mec. Prends la meilleur version, regarde ce qui lui manque par rapport aux changements entre les autres versions. And go on.
 
-- gravité prend bien en compte les platform ?
 - Si dans un moveset il n'y a pas de move pour un snake alors il doit continuer tout droit. Important à simuler ? Oui car un snake n'a pas de mouvement quand il est enfermé, sans mouvments il ne se déplace pas et donc n'a pas de collisions !!
     - Après l'avoir fait, revoir les conditinos de création d'un move :
         - != OOB
@@ -64,10 +63,6 @@ sh create_arena.sh
         - et == tail
 
         - Don't generate move on snakes when it's not the tail
-- retry priority queue as chatgpt
-
-- Bug: platform_bonuses integer truncation (line 1311, 1360)
-    int platform_bonuses = 0;  // <-- should be float
 
 - Alléger la data structure de State avec des int8 par exemple
 
@@ -75,7 +70,7 @@ sh create_arena.sh
     - Log time merge_movesets
     - Improve merge_movesets
 
-- Comment c'est possible de générer un move OOB !!
+- Comment c'est possible de générer un move OOB !! 
 - Faire attention lorsqu'un snake n'a aucun move :
     - Recroqueville sur lui même
     - Bord de map bloqué par un autre
