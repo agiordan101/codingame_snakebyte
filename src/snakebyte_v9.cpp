@@ -1127,8 +1127,10 @@ bool apply_snake_gravity(State &state, Snake &snake)
 
             min_y = min(min_y, get_y(pos_below));
         }
+
+        // If so, gravity application is over for this snake
         if (blocked)
-            return false;
+            break;
 
         // Remove snake cells from old positions
         for (int i = 0; i < snake_body_length; i++)
