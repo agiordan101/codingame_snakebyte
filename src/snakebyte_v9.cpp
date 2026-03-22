@@ -146,9 +146,12 @@ static const Pos DIR_TO_OFFSET[4] = {NORTH_POS_OFFSET, SOUTH_POS_OFFSET, WEST_PO
 
 inline uint8_t pos_offset_to_dir(Pos offset)
 {
-    if (offset == NORTH_POS_OFFSET) return DIR_NORTH;
-    if (offset == SOUTH_POS_OFFSET) return DIR_SOUTH;
-    if (offset == WEST_POS_OFFSET) return DIR_WEST;
+    if (offset == NORTH_POS_OFFSET)
+        return DIR_NORTH;
+    if (offset == SOUTH_POS_OFFSET)
+        return DIR_SOUTH;
+    if (offset == WEST_POS_OFFSET)
+        return DIR_WEST;
     return DIR_EAST;
 }
 
@@ -599,15 +602,31 @@ struct BFSDistanceToEnergy
 // Global lookup table: For each cell, list of energies sorted by distance
 BFSDistanceToEnergy cells_to_energy_lookup_table[MAX_CELL_COUNT][MAX_ENERGY_COUNT];
 
-int lookup_initial_bfs_distance_to_closest_energy(State &state, Pos snake_head_pos)
+int lookup_initial_bfs_distance_to_closest_energy(State &state, Pos from_pos, Pos &out_energy_pos)
 {
     // Iterate from the closest to the farthest energy
     for (int e = 0; e < MAX_ENERGY_COUNT; e++)
     {
-        BFSDistanceToEnergy bfsdistance = cells_to_energy_lookup_table[snake_head_pos][e];
+        BFSDistanceToEnergy bfsdistance = cells_to_energy_lookup_table[from_pos][e];
 
         // Verify that the energy still exists
         if (get_cell(state, bfsdistance.energy_pos) == CELL_ENERGY)
+        {
+            out_energy_pos = bfsdistance.energy_pos;
+            return bfsdistance.distance;
+        }
+    }
+
+    return -1;
+}
+
+int lookup_initial_bfs_distance_to_energy(Pos from_pos, Pos target_energy_pos)
+{
+    for (int e = 0; e < MAX_ENERGY_COUNT; e++)
+    {
+        BFSDistanceToEnergy bfsdistance = cells_to_energy_lookup_table[from_pos][e];
+
+        if (bfsdistance.energy_pos == target_energy_pos)
             return bfsdistance.distance;
     }
 
@@ -1444,77 +1463,79 @@ float evaluate_state(State &state, int player_id)
     if (is_game_ended(state))
         return evaluate_end_states(state, player_id, player_points, opponent_points);
 
-    float dist_sum = 0;
-    float platform_bonuses = 0;
-    for (int i = 0; i < get_player_alive_snake_count(state, player_id); i++)
+    int reachable_energy_score = 0;
+    int support_search_score = 0;
+    int snake_count = get_player_alive_snake_count(state, player_id);
+
+    for (int i = 0; i < snake_count; i++)
     {
         int snake_id = get_player_alive_snake_id(state, player_id, i);
         Snake &snake = get_snake(state, snake_id);
         Pos snake_head_pos = get_snake_head_pos(snake);
-
-        // TODO: Add maluses/bonuses about surviving
-
-        Pos closest;
-        int dist;
-        dist = lookup_initial_bfs_distance_to_closest_energy(state, snake_head_pos);
-        // dist = find_closest_energy_cell_manhattan(state, snake_head_pos, closest);
-        // dist = find_closest_energy_cell_bfs(state, snake_head_pos, closest);
-        // dist = find_closest_energy_cell_bfs_iterative(state, snake_head_pos, closest);
-        if (dist == -1)
-            dist_sum += MAX_MAP_WIDTH + MAX_MAP_HEIGHT; // If no energy cell found, consider it very far
-        else
-            dist_sum += dist;
-
-        // Reconstruct body once for both loops below
-        Pos body_cache[MAX_SNAKE_SIZE];
-        reconstruct_body(snake, body_cache);
         int snake_len = get_snake_body_length(snake);
 
+        Pos body_cache[MAX_SNAKE_SIZE];
+        reconstruct_body(snake, body_cache);
+
+        int best_promising_support_search_score = MAX_WIDTH + MAX_HEIGHT;
+        bool found_accessible_energy = false;
+
         for (int bi = 0; bi < snake_len; bi++)
         {
             Pos snake_body_pos = body_cache[bi];
 
-            // Add maluses for being out of map
-            if (get_x(snake_body_pos) < MAP_PADDING ||
-                get_x(snake_body_pos) >= MAX_WIDTH - MAP_PADDING ||
-                get_y(snake_body_pos) < MAP_PADDING ||
-                get_y(snake_body_pos) >= MAX_HEIGHT - MAP_PADDING)
-            {
-                dist_sum += 1;
-            }
-        }
-
-        // Add bonuses depending on the first body index on a platform. The closer to the head, the more bonus.
-        // The idea is that reaching a platform to navigate could be interesting even if we move away from the energy
-        for (int bi = 0; bi < snake_len; bi++)
-        {
-            Pos snake_body_pos = body_cache[bi];
             if (is_south_cell_out_of_bounds(snake_body_pos))
                 continue;
 
             Pos cell_under = get_south_pos(snake_body_pos);
-            if (get_cell(state, cell_under) == CELL_PLATFORM)
+            CellType cell_under_type = get_cell(state, cell_under);
+            if (cell_under_type == CELL_EMPTY || cell_under_type == snake_id)
+                continue;
+
+            // This body cell is on a solid support point - find closest existing energy from this cell
+            Pos energy_pos;
+            int body_support_to_closest_energy_dist = lookup_initial_bfs_distance_to_closest_energy(state, snake_body_pos, energy_pos);
+            if (body_support_to_closest_energy_dist == -1)
+                continue;
+
+            // Find distance from head to this same energy
+            int head_to_energy_dist = lookup_initial_bfs_distance_to_energy(snake_head_pos, energy_pos);
+            if (head_to_energy_dist == -1)
+                head_to_energy_dist = MAX_WIDTH + MAX_HEIGHT;
+
+            // Detect if energy is reachable from the support cell
+            if (body_support_to_closest_energy_dist <= snake_len)
             {
-                // Snake bonus in ]0, 1.5]
-                // So: head on platform = -1.5 dist
-                // Should be >1 to encourage sidesteps over staying at the same position due tu gravity
-                // Should be <2 to discourage sidesteps over going directly onto the energy
-                platform_bonuses += 1.5 * (snake_len - bi) / (float)snake_len;
+                // An energy is reachable from this body support
+                // Goal: Reduce the distance between reachable energy and the head, while looking for a best support point
+                reachable_energy_score += encode_lexicographic_priority(head_to_energy_dist, body_support_to_closest_energy_dist, MAX_WIDTH + MAX_HEIGHT);
+                found_accessible_energy = true;
                 break;
             }
+            else
+            {
+                // No energy are reachable from this body support
+                // Goal: Look for a better support point, while minimizing the distance between the head and the energy
+                int promising_support_search_score = encode_lexicographic_priority(head_to_energy_dist, body_support_to_closest_energy_dist, MAX_WIDTH + MAX_HEIGHT);
+                best_promising_support_search_score = min(best_promising_support_search_score, promising_support_search_score);
+            }
+        }
+
+        // TODO: Look for the closest support point that offer an accessible energy for this snake
+
+        if (!found_accessible_energy)
+        {
+            support_search_score += best_promising_support_search_score;
         }
     }
 
-    dist_sum -= platform_bonuses;
-
-    // Multiply dist so distance=1 doesn't be equivalent to a game point
-    float dist_score = dist_sum != 0 ? 1.0 / (2 * dist_sum) : 0.0;
+    int lexicographic_result = encode_lexicographic_priority(reachable_energy_score, support_search_score, snake_count * (MAX_WIDTH + MAX_HEIGHT));
+    float dist_score = 1.0f / lexicographic_result;
 
     auto end_chrono = chrono::high_resolution_clock::now();
     evaluate_state_time += chrono::duration_cast<chrono::microseconds>(end_chrono - start_chrono).count();
     evaluate_state_count++;
 
-    // Game points is positive if it's good for the player, negative if it's good for its opponent, so we invert it for opponent evaluation
     return player_points - opponent_points + dist_score;
 }
 

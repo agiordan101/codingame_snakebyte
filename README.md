@@ -118,6 +118,8 @@ Tester d'autres heuristic :
     On calcule le score final avec :
         - player_points - enemy_points + 1 / lexicographix_result
 
+- AMELIORATION: Pour chaque support : Trouver le plus proche qui permet au snake de longueur X dy arriver. Récursivement ? Chaque support serait une node dans un graph de déplacements. Les support espacé d'une distance inférieur à la taille du snake sont connecté dans le graph.
+
 - Pour que les snakes se spread: Ajouter la score à partir de la somme entre chaque énergie et leur snake le plus proche
 
 - Pour départager 2 energies qui ont plus ou moins la meme distance, on pourrait rajouter entre [0, 2] un score correspondant à la somme des distance avec toutes les energies -> favorise la direction des groupes de cells
@@ -216,15 +218,15 @@ Don't generate move on platforms & Fix platform bonuses (was not working)
 
 League: Legend (max)
 First publication : 57/2277
-Last publication: -
+Last publication: 52/2277
 
-# v5.10
+# v5.9
 
 Don't generate move on platforms & Fix platform bonuses (was not working)
 
 League: Legend (max)
 First publication : 30/2215
-Last publication: 50/2270
+Last publication: 55/2270
 
 # v5.7
 
