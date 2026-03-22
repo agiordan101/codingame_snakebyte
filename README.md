@@ -9,8 +9,18 @@ To compete 2 bots (100 silver games with 4 threads) :
 make && \
 cg-colosseum battle \
     --preset winter2026 -d league=4 -n 100 -t 4 \
-    --p1 ./bin/snakebyte_v4 \
-    --p2 ./bin/snakebyte_v4
+    --p1 ./bin/snakebyte_v5.9 \
+    --p2 ./bin/snakebyte_v5.9
+```
+
+To compare 2 bots (100 silver games with 4 threads) :
+
+```bash
+make && \
+cg-colosseum compare -n 500 -t 6 \
+    --preset winter2026 \
+    --p1 ./bin/snakebyte_v5.9 \
+    --p2 ./bin/snakebyte_v5.9 --swap
 ```
 
 To analyze a specific game :
@@ -19,8 +29,8 @@ To analyze a specific game :
 make && \
 cg-colosseum replay \
     --preset winter2026 -d league=4 \
-    --p1 "./bin/snakebyte_v4" \
-    --p2 ./bin/snakebyte_v4 \
+    --p1 "./bin/snakebyte_v5.9" \
+    --p2 ./bin/snakebyte_v5.9 \
     --seed=-7137723507467264000 \
     --view
 ```
@@ -31,8 +41,8 @@ To analyze time consumption (Generate file callgrind.out.*) :
 make && \
 cg-colosseum battle \
     --preset winter2026 -d league=4 -n 1 -t 1 \
-    --p1 "valgrind --tool=callgrind ./bin/snakebyte_v4" \
-    --p2 ./bin/snakebyte_4
+    --p1 "valgrind --tool=callgrind ./bin/snakebyte_v5.9" \
+    --p2 ./bin/snakebyte_v5.9
 ```
 
 For debug memory issues (Generate file valgrind.log) :
@@ -41,8 +51,8 @@ For debug memory issues (Generate file valgrind.log) :
 make && \
 cg-colosseum battle \
     --preset winter2026 -d league=4 -n 1 -t 1 \
-    --p1 "valgrind -s --leak-check=full --track-origins=yes --log-file=valgrind.log ./bin/snakebyte_v4" \
-    --p2 ./bin/snakebyte_v4
+    --p1 "valgrind -s --leak-check=full --track-origins=yes --log-file=valgrind.log ./bin/snakebyte_v5.9" \
+    --p2 ./bin/snakebyte_v5.9
 ```
 
 To test differents bots in an arena :
@@ -73,9 +83,13 @@ sh create_arena.sh
     - Recroqueville sur lui même
     - Bord de map bloqué par un autre
 
+- remove useless things
+- Move ocnstexpr at the beginning as v8 versions
+
 Tester d'autres heuristic :
 
 - Pour que les snakes se spread: Ajouter la score à partir de la somme entre chaque énergie et leur snake le plus proche
+
 - Pour départager 2 energies qui ont plus ou moins la meme distance, on pourrait rajouter entre [0, 2] un score correspondant à la somme des distance avec toutes les energies -> favorise la direction des groupes de cells
 
 - Ajouter des bonus en fonction de ce qu'il y a autour du snake :
@@ -83,10 +97,7 @@ Tester d'autres heuristic :
     - Snake allié: Pareil que pour les platforms, mais avec un bonus plus faible
     - Snake enemy: Pareil que pour les platforms, mais avec un malus
 
-- Créer une map de distance entre les cases au dessus des platforms et les energies, avec BFS. les cases qui ne sont pas au dessus : -1
-    - Quand la case est plus haut que l'énergie : On prend que X (manhattan ducoup ?)
-    
-- Avoir un BFS avec gravité qui determine si un snake peut ateindre une energy, sinon faire en sorte qu'il se raproche de la queue d'un allié
+- Créer une lookup table permettant de connaitre les distances/énergies accessible via chaque cases, pour chaque snake size entre 3 et 8/10. Utiliser un BFS avec gravité qui parcourt toute les cases 1 fois
     
 - A faire après le beam search, pour correctement évaluer l'amélioration du ratio temps/précision de l'heuristic : Faire un nouveau DFS qui prends en compte la gravité et son body :
     On prends l'état actuel
@@ -169,13 +180,21 @@ MoveSet -> A list of Move
 
 ## History
 
+# v5.9
+
+Don't generate move on platforms & Fix platform bonuses (was not working)
+
+League: Legend (max)
+First publication : 30/2215
+Last publication: -
+
 # v5.7
 
 Don't generate move on platforms & Fix platform bonuses (was not working)
 
 League: Legend (max)
 First publication : 82/2215
-Last publication: 78/2220
+Last publication: 110/2220
 
 # v5.5
 
