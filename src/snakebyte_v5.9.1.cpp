@@ -973,7 +973,17 @@ void remove_eaten_energies(State &state, Pos eaten_energies[MAX_SNAKE_COUNT], in
     }
 }
 
-int find_snake_collisions(State &state, Snake *colliding_snakes[MAX_SNAKE_COUNT])
+bool is_snake_in_moveset(MoveSet &moveset, int snake_id)
+{
+    for (int i = 0; i < get_moveset_move_count(moveset); i++)
+    {
+        if (get_move_snake_id(get_moveset_move(moveset, i)) == snake_id)
+            return true;
+    }
+    return false;
+}
+
+int find_snake_collisions(State &state, Snake *colliding_snakes[MAX_SNAKE_COUNT], MoveSet &moveset)
 {
     // Find collision using cells grid (O(1) per snake) instead of iterating body parts
     // After apply_all_moves: cells contain old body positions (minus removed tails), new heads are NOT in cells yet
@@ -982,11 +992,18 @@ int find_snake_collisions(State &state, Snake *colliding_snakes[MAX_SNAKE_COUNT]
 
     for (int snake_index = 0; snake_index < alive_count; snake_index++)
     {
-        bool collide = false;
         int snake_id = get_alive_snake_id(state, snake_index);
         Snake &snake = get_snake(state, snake_id);
         Pos snake_head_pos = get_snake_head_pos(snake);
 
+        // Skip collision checking for snakes that didn't move
+        if (!is_snake_in_moveset(moveset, snake_id))
+        {
+            // Head cell is already set in the grid from before, no need to update
+            continue;
+        }
+
+        bool collide = false;
         CellType head_cell = get_cell(state, snake_head_pos);
 
         // Platform collision
@@ -1172,7 +1189,7 @@ void apply_moveset(State &state, MoveSet &moveset)
 
     // Find collision & Set new snake pos in cells if not
     Snake *colliding_snakes[MAX_SNAKE_COUNT];
-    int colliding_snake_count = find_snake_collisions(state, colliding_snakes);
+    int colliding_snake_count = find_snake_collisions(state, colliding_snakes, moveset);
 
     // Reset snake positions if we found a collision & Kill snakes if needed
     apply_snake_collisions(state, colliding_snakes, colliding_snake_count);
