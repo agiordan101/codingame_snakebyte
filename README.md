@@ -88,6 +88,36 @@ sh create_arena.sh
 
 Tester d'autres heuristic :
 
+- Avec BFSDistanceToEnergy cells_to_energy_lookup_table :
+    - On regarde les points d'appuis du snake. A partir de ces points d'appuis, on regarde la distance de l'énrgie la plus proche, si < snake length on lui donne des bonus ! Par rapport à la distance entre la tête CETTE MEME l'énergie
+        Intention : Sil peut aller la prendre, on le récompense par rapport à la dostance qu"il a avec cette energie !
+    - Lorsque plusieurs points d'appuis, on effetue l'opération uniquement sur le pooint d'appuis le plus proche de la tête
+    Quand pas de récompense ? -> Utiliser encode_lexicographic_priority to guide them
+
+    Pseudo code :
+    - Pour chaque Snake :
+        - On reset "max_dist_between_solid_cell_and_energy" à WIDTH + HEIGHT
+        - On parcours le body de ce Snake :
+            - Si la cell d'un point du body est sur un point d'appuis (Pas un case vide ou lui meme en dessous)
+                - On parcours cells_to_energy_lookup_table à partir de la cell du Snake actuelle à la recherche de la première énergie toujours existante.
+                - Si cette énergie est à une distance de snake_length + 1 ou moins
+                    - Alors on ajoute à "head_to_accessible_energy_distances" un score calculé avec encode_lexicographic_priority et les valeurs suivantes dans l'odre :
+                        - La distance entre sa tête et CETTE énergie (En cherchant dans cells_to_energy_lookup_table à partir de la cell de la tête)
+                        - La distance entre ce membre du body et CETTE énergie (Déjà récupéré précedemment)
+                    - On passe au Snake suivant (break la loop sur le body de ce snake)
+                - Sinon
+                    - Alors on trouve la distance entre le point d'appuis et l'énergie vivante la plus proche avec lookup_initial_bfs_distance_to_closest_energy
+                    - Si cette distance est plus petite que le max_dist_between_solid_cell_and_energy actuel, alors on l'update avec.
+        - Après avoir parcours le body, si aucune énergie n'est accessible à partir des points d'appuis
+            - Alors on ajoute max_dist_between_solid_cell_and_energy à solid_cell_to_energy_distances
+
+    A la fin on calcul "lexicographix_result" avec encode_lexicographic_priority et la priorité suivant (Leur maximum étant snake_count * (WIDTH + HEIGHT)) :
+        - head_to_accessible_energy_distances
+        - solid_cell_to_energy_distances
+
+    On calcule le score final avec :
+        - player_points - enemy_points + 1 / lexicographix_result
+
 - Pour que les snakes se spread: Ajouter la score à partir de la somme entre chaque énergie et leur snake le plus proche
 
 - Pour départager 2 energies qui ont plus ou moins la meme distance, on pourrait rajouter entre [0, 2] un score correspondant à la somme des distance avec toutes les energies -> favorise la direction des groupes de cells
@@ -180,13 +210,21 @@ MoveSet -> A list of Move
 
 ## History
 
-# v5.9
+# v5.10
+
+Don't generate move on platforms & Fix platform bonuses (was not working)
+
+League: Legend (max)
+First publication : 57/2277
+Last publication: -
+
+# v5.10
 
 Don't generate move on platforms & Fix platform bonuses (was not working)
 
 League: Legend (max)
 First publication : 30/2215
-Last publication: -
+Last publication: 50/2270
 
 # v5.7
 

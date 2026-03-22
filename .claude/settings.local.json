@@ -11,7 +11,8 @@
       "mcp__serena__search_for_pattern",
       "mcp__serena__execute_shell_command",
       "mcp__serena__list_dir",
-      "Bash(g++ -std=c++20 -O2 -Wall -Wextra -o /tmp/snakebyte_test src/snakebyte_v4.4.cpp)"
+      "Bash(g++ -std=c++20 -O2 -Wall -Wextra -o /tmp/snakebyte_test src/snakebyte_v4.4.cpp)",
+      "Bash(make:*)"
     ]
   }
 }

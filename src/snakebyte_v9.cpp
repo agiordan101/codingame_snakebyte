@@ -1,4 +1,4 @@
-// Version 5.9
+// Version 9
 
 // Algorithms :
 //  v1 - Each snakes go to closest Energy cell using BFS
@@ -146,12 +146,9 @@ static const Pos DIR_TO_OFFSET[4] = {NORTH_POS_OFFSET, SOUTH_POS_OFFSET, WEST_PO
 
 inline uint8_t pos_offset_to_dir(Pos offset)
 {
-    if (offset == NORTH_POS_OFFSET)
-        return DIR_NORTH;
-    if (offset == SOUTH_POS_OFFSET)
-        return DIR_SOUTH;
-    if (offset == WEST_POS_OFFSET)
-        return DIR_WEST;
+    if (offset == NORTH_POS_OFFSET) return DIR_NORTH;
+    if (offset == SOUTH_POS_OFFSET) return DIR_SOUTH;
+    if (offset == WEST_POS_OFFSET) return DIR_WEST;
     return DIR_EAST;
 }
 
@@ -1427,50 +1424,6 @@ int evaluate_end_states(State &state, int player_id, int player_points, int oppo
 
 int evaluate_state_time = 0;
 int evaluate_state_count = 0;
-// Returns a bonus in [0, 1]. High when energies are close to snakes on average, low when far.
-// Uses manhattan distance to avoid lookup table indirection and memset overhead.
-float compute_energy_proximity_bonus(State &state)
-{
-    if (state.energy_count == 0 || state.alive_snake_count == 0)
-        return 0.0;
-
-    // Cache snake head positions
-    int head_count = state.alive_snake_count;
-    int head_x[MAX_SNAKE_COUNT];
-    int head_y[MAX_SNAKE_COUNT];
-    for (int si = 0; si < head_count; si++)
-    {
-        Pos head = get_snake_head_pos(get_snake(state, state.alive_snake_ids[si]));
-        head_x[si] = get_x(head);
-        head_y[si] = get_y(head);
-    }
-
-    // For each existing energy, find min manhattan distance from any snake head
-    float total_min_dist = 0;
-    int counted = 0;
-    for (int ei = 0; ei < state.energy_count; ei++)
-    {
-        Pos epos = state.energies[ei];
-        if (get_cell(state, epos) != CELL_ENERGY)
-            continue;
-
-        int ex = get_x(epos);
-        int ey = get_y(epos);
-        int min_d = MAX_WIDTH + MAX_HEIGHT;
-        for (int si = 0; si < head_count; si++)
-        {
-            int d = abs(head_x[si] - ex) + abs(head_y[si] - ey);
-            if (d < min_d)
-                min_d = d;
-        }
-        total_min_dist += min_d;
-        counted++;
-    }
-
-    float avg_min_dist = total_min_dist / counted;
-    return 1.0 / (1.0 + 0.5 * avg_min_dist);
-}
-
 float evaluate_state(State &state, int player_id)
 {
     auto start_chrono = chrono::high_resolution_clock::now();
@@ -1552,19 +1505,17 @@ float evaluate_state(State &state, int player_id)
         }
     }
 
-    // Make sure distance sum > 1 so the division doesn't be equivalent to a game point
-    dist_sum = max(1.1f, dist_sum - platform_bonuses);
-    float dist_score = 1.0 / (2 * dist_sum);
+    dist_sum -= platform_bonuses;
 
-    // Bonus in [0, 1]: high when energies are close to snakes (easy to grab), low when far (spread out)
-    float energy_proximity_bonus = compute_energy_proximity_bonus(state);
+    // Multiply dist so distance=1 doesn't be equivalent to a game point
+    float dist_score = dist_sum != 0 ? 1.0 / (2 * dist_sum) : 0.0;
 
     auto end_chrono = chrono::high_resolution_clock::now();
     evaluate_state_time += chrono::duration_cast<chrono::microseconds>(end_chrono - start_chrono).count();
     evaluate_state_count++;
 
     // Game points is positive if it's good for the player, negative if it's good for its opponent, so we invert it for opponent evaluation
-    return player_points - opponent_points + dist_score + energy_proximity_bonus;
+    return player_points - opponent_points + dist_score;
 }
 
 int choose_best_player_moveset_time = 0;
