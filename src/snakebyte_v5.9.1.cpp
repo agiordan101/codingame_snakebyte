@@ -1,4 +1,4 @@
-// Version 5.9
+// Version 5.9.1
 
 // Algorithms :
 //  v1 - Each snakes go to closest Energy cell using BFS
@@ -49,6 +49,7 @@
 //      v5.9 - Replace int16 snakepos[100] by int8 directions[99] )
 //              & Refacto collision detection via la grille cells au lieu d'itérer les segments
 //              & Réduit la taille du Snake de 212 à 116 bytes.
+//          v5.9.1 - Pour que les snakes se spread: Ajouter la score à partir de la somme entre chaque énergie et leur snake le plus proche
 //  v6 - Rework beam search state data structures : with 2 priority queues and 2 buffers alternating as beam states and beam candidates (Very bad due to cache misses)
 //  v7 - Rework beam search state data structures : Use 2 static state arrays and nth_element instead of vector and priority_queue
 //      v7.1 - Don't generate move on platforms

@@ -1465,8 +1465,11 @@ float evaluate_state(State &state, int player_id, Pos *snake_targets, bool loggi
 
     int reachable_energy_score = 0;
     int support_search_score = 0;
-    int snake_count = get_player_alive_snake_count(state, player_id);
 
+    int ratio_between_score_dists = MAX_WIDTH + MAX_HEIGHT;
+    int ratio_between_scores = ratio_between_score_dists * ratio_between_score_dists;
+
+    int snake_count = get_player_alive_snake_count(state, player_id);
     for (int i = 0; i < snake_count; i++)
     {
         int snake_id = get_player_alive_snake_id(state, player_id, i);
@@ -1476,9 +1479,6 @@ float evaluate_state(State &state, int player_id, Pos *snake_targets, bool loggi
 
         Pos body_cache[MAX_SNAKE_SIZE];
         reconstruct_body(snake, body_cache);
-
-        int best_promising_support_search_score = encode_lexicographic_priority(MAX_WIDTH + MAX_HEIGHT, MAX_WIDTH + MAX_HEIGHT, MAX_WIDTH + MAX_HEIGHT);
-        bool found_accessible_energy = false;
 
         for (int bi = 0; bi < snake_len; bi++)
         {
@@ -1499,7 +1499,7 @@ float evaluate_state(State &state, int player_id, Pos *snake_targets, bool loggi
             {
                 if (logging)
                 {
-                    fprintf(stderr, "Snake %d: body cell %d: Cell below isn't a support\n", snake_id, bi);
+                    fprintf(stderr, "Snake %d: body cell %d: Cell below (Cord %d %d) isn't a support, it's %d\n", snake_id, bi, get_map_x(cell_under), get_map_y(cell_under), cell_under_type);
                 }
                 continue;
             }
@@ -1525,42 +1525,39 @@ float evaluate_state(State &state, int player_id, Pos *snake_targets, bool loggi
             {
                 // An energy is reachable from this body support
                 // Goal: Reduce the distance between reachable energy and the head, while looking for a best support point
-                int score = encode_lexicographic_priority(head_to_energy_dist, body_support_to_closest_energy_dist, MAX_WIDTH + MAX_HEIGHT);
+                int score = encode_lexicographic_priority(head_to_energy_dist, body_support_to_closest_energy_dist, ratio_between_score_dists);
+                // int score = head_to_energy_dist;
                 reachable_energy_score += score;
-                snake_targets[i] = energy_pos;
-                found_accessible_energy = true;
 
+                snake_targets[i] = energy_pos;
                 if (logging)
                 {
                     fprintf(stderr, "Snake %d: Found reachable energy at %d,%d from supported cell %d,%d. Add score: %d\n", i, get_map_x(energy_pos), get_map_y(energy_pos), get_map_x(snake_body_pos), get_map_y(snake_body_pos), score);
                 }
-                break;
             }
             else
             {
                 // No energy are reachable from this body support
                 // Goal: Look for a better support point, while minimizing the distance between the head and the energy
-                int promising_support_search_score = encode_lexicographic_priority(head_to_energy_dist, body_support_to_closest_energy_dist, MAX_WIDTH + MAX_HEIGHT);
-                best_promising_support_search_score = min(best_promising_support_search_score, promising_support_search_score);
+                int score = encode_lexicographic_priority(body_support_to_closest_energy_dist, head_to_energy_dist, ratio_between_score_dists);
+                // int score = body_support_to_closest_energy_dist;
+                support_search_score += score;
 
+                snake_targets[i] = snake_body_pos;
                 if (logging)
                 {
-                    fprintf(stderr, "Snake %d: Can't find a reachable energy from supported cell %d,%d. Best score: %d\n", i, get_map_x(snake_body_pos), get_map_y(snake_body_pos), best_promising_support_search_score);
+                    fprintf(stderr, "Snake %d: Can't find a reachable energy from supported cell %d,%d. Score: %d\n", i, get_map_x(snake_body_pos), get_map_y(snake_body_pos), score);
                 }
             }
+
+            break;
         }
 
         // TODO: Look for the closest support point that offer an accessible energy for this snake
-
-        if (!found_accessible_energy)
-        {
-            snake_targets[i] = snake_head_pos;
-            support_search_score += best_promising_support_search_score;
-        }
     }
 
-    int lexicographic_result = encode_lexicographic_priority(reachable_energy_score, support_search_score, 100);
-    float dist_score = 1.0f / (float)lexicographic_result;
+    int lexicographic_result = encode_lexicographic_priority(reachable_energy_score, support_search_score, ratio_between_scores);
+    float dist_score = 1.0f / (float)(1 + lexicographic_result);
 
     if (logging)
     {
@@ -1673,6 +1670,28 @@ MoveSet choose_best_snake_moves(State &state, int player_id)
 void print_marks(State &state, MoveSet best_moveset)
 {
     State next_state;
+
+    // Snake &snake = get_snake(state, 0);
+    // Pos snake_moves[3];
+    // int snake_move_count = generate_snake_moves(state, snake, snake_moves);
+    // for (int j = 0; j < snake_move_count; j++)
+    // {
+    //     MoveSet snake_moveset;
+    //     set_moveset_move_count(snake_moveset, 1);
+    //     Move &move = get_moveset_move(snake_moveset, 0);
+    //     set_move_snake_id(move, 0);
+    //     set_move_dst_pos(move, snake_moves[j]);
+
+    //     memcpy(&next_state, &state, sizeof(State));
+    //     apply_moveset(next_state, snake_moveset);
+
+    //     Pos snake_targets[MAX_PLAYER_SNAKE_COUNT];
+    //     float score = evaluate_state(next_state, map_properties.my_id, snake_targets, false);
+
+    //     print_moveset(snake_moveset);
+    //     fprintf(stderr, "Snake %d: move %d: score %f\n", 0, j, score);
+    // }
+
     memcpy(&next_state, &state, sizeof(State));
     apply_moveset(next_state, best_moveset);
 
@@ -1818,10 +1837,19 @@ void find_candidates_among_state_children(State &state, int player_id, std::prio
 
         // Find state improvment
         Pos snake_targets[MAX_PLAYER_SNAKE_COUNT];
-        next_state.state_evaluation = evaluate_state(next_state, player_id, snake_targets);
-        float delta_h = next_state.state_evaluation - state.state_evaluation;
+        // if (get_map_x(ally_movesets[i].moves[2].dst_pos) == 2)
+        if (next_state.turn == 250)
+        {
+            next_state.state_evaluation = evaluate_state(next_state, player_id, snake_targets, true);
+        }
+        else
+            next_state.state_evaluation = evaluate_state(next_state, player_id, snake_targets, false);
+
+        // print_moveset(turn_moveset);
+        // fprintf(stderr, "State evaluation = %f\n", next_state.state_evaluation);
 
         // Add state improvment to the inherited heuristic, weighted by the turn confidence (decreasing with depth)
+        float delta_h = next_state.state_evaluation - state.state_evaluation;
         set_heuristic(next_state, get_heuristic(state) + next_state.heuristic_depth_weight * delta_h);
 
         consider_state_to_be_candidate(next_state, ally_movesets[i], beam_search_candidates, beam_width);
