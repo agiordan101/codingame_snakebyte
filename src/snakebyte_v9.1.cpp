@@ -1,4 +1,4 @@
-// Version 9
+// Version 9.1
 
 // Algorithms :
 //  v1 - Each snakes go to closest Energy cell using BFS
@@ -62,7 +62,7 @@
 //  v9 - New heuristic: Add big bonuses when a snake can reach an energy from its first support cell (Head dist in priority then support dist). If not add bonus with support dist in priority then head dist.
 //      & fix gravity signals
 //      & fix collisions when one player only moved
-//      v9.1 - Remove energies pos from State : 2972 -> 2772 bytes
+//      v9.1 - Remove useless energy array from State : 2972 -> 2772 bytes
 
 #undef _GLIBCXX_DEBUG
 #pragma GCC optimize("Ofast,unroll-loops,omit-frame-pointer,inline")
@@ -369,7 +369,6 @@ struct State
     int alive_snake_count;
     int alive_snake_ids[MAX_SNAKE_COUNT];
 
-    Pos energies[MAX_ENERGY_COUNT];
     int energy_count;
 
     float heuristic;
@@ -391,7 +390,6 @@ int get_player_alive_snake_count(State &state, int player_id) { return state.pla
 int get_player_alive_snake_id(State &state, int player_id, int index) { return state.player_alive_snake_ids[player_id][index]; }
 int get_alive_snake_count(State &state) { return state.alive_snake_count; }
 int get_alive_snake_id(State &state, int index) { return state.alive_snake_ids[index]; }
-Pos get_energy(State &state, int index) { return state.energies[index]; }
 float get_heuristic(State &state) { return state.heuristic; }
 MoveSet &get_first_depth_moveset(State &state) { return state.first_depth_moveset; }
 
@@ -404,7 +402,6 @@ void add_player_loss(State &state, int player_id, int loss_count)
 }
 void set_energy_count(State &state, int count) { state.energy_count = count; }
 void set_cell(State &state, Pos pos, CellType value) { state.cells[pos] = value; }
-void set_energy(State &state, int index, Pos pos) { state.energies[index] = pos; }
 void set_heuristic(State &state, float heuristic) { state.heuristic = heuristic; }
 void set_first_depth_moveset(State &state, MoveSet &moveset) { state.first_depth_moveset = moveset; }
 
@@ -467,18 +464,9 @@ void remove_snake_from_alive_snake_ids(State &state, int snake_id, int player_id
         }
     }
 }
-void remove_energy(State &state, Pos energy)
+void remove_energy(State &state)
 {
-    for (int i = 0; i < state.energy_count; i++)
-    {
-        if (get_energy(state, i) == energy)
-        {
-            if (i + 1 < state.energy_count)
-                memmove(&state.energies[i], &state.energies[i + 1], SIZE_OF_POS * (state.energy_count - i - 1));
-            state.energy_count--;
-            return;
-        }
-    }
+    state.energy_count--;
 }
 
 int revert_last_move_time = 0;
@@ -609,6 +597,10 @@ struct BFSDistanceToEnergy
     Pos energy_pos;
 };
 
+// Initial energy positions (used only for BFS lookup table construction)
+Pos initial_energies[MAX_ENERGY_COUNT];
+int initial_energy_count = 0;
+
 // Global lookup table: For each cell, list of energies sorted by distance
 BFSDistanceToEnergy cells_to_energy_lookup_table[MAX_CELL_COUNT][MAX_ENERGY_COUNT];
 
@@ -646,9 +638,9 @@ int lookup_initial_bfs_distance_to_energy(Pos from_pos, Pos target_energy_pos)
 void create_bfs_cells_to_energy_distance_lookup_table(State &state)
 {
     // BFS from each energy cell outward, blocking only platforms
-    for (int ei = 0; ei < state.energy_count; ei++)
+    for (int ei = 0; ei < initial_energy_count; ei++)
     {
-        Pos energy_pos = state.energies[ei];
+        Pos energy_pos = initial_energies[ei];
 
         // Initialize with default distance because some energy cells may be innaccessible
         for (int i = 0; i < MAX_CELL_COUNT; i++)
@@ -696,7 +688,7 @@ void create_bfs_cells_to_energy_distance_lookup_table(State &state)
     {
         sort(
             cells_to_energy_lookup_table[cell],
-            cells_to_energy_lookup_table[cell] + state.energy_count,
+            cells_to_energy_lookup_table[cell] + initial_energy_count,
             [](const BFSDistanceToEnergy &a, const BFSDistanceToEnergy &b)
             {
                 return a.distance < b.distance;
@@ -706,9 +698,9 @@ void create_bfs_cells_to_energy_distance_lookup_table(State &state)
 
 void print_bfs_distances_per_energy(State &state)
 {
-    for (int ei = 0; ei < state.energy_count; ei++)
+    for (int ei = 0; ei < initial_energy_count; ei++)
     {
-        Pos energy_pos = state.energies[ei];
+        Pos energy_pos = initial_energies[ei];
         fprintf(stderr, "\n--- BFS Distances for Energy at (%d, %d) ---\n", get_map_x(energy_pos), get_map_y(energy_pos));
 
         for (int y = 0; y < map_properties.height; y++)
@@ -724,7 +716,7 @@ void print_bfs_distances_per_energy(State &state)
                 {
                     // Find distance from the cell to the current energy
                     bool displayed = false;
-                    for (int e = 0; e < state.energy_count; e++)
+                    for (int e = 0; e < initial_energy_count; e++)
                     {
                         if (cells_to_energy_lookup_table[pos][e].energy_pos == energy_pos)
                         {
@@ -994,7 +986,7 @@ void remove_eaten_energies(State &state, Pos eaten_energies[MAX_SNAKE_COUNT], in
     for (int i = 0; i < eaten_energy_count; i++)
     {
         set_cell(state, eaten_energies[i], CELL_EMPTY);
-        remove_energy(state, eaten_energies[i]);
+        remove_energy(state);
     }
 }
 
@@ -1378,15 +1370,19 @@ int find_closest_energy_cell_manhattan(State &state, Pos start_pos, Pos &closest
 {
     int closest_distance = -1;
 
-    for (int i = 0; i < get_energy_count(state); i++)
+    for (int y = 0; y < map_properties.height; y++)
     {
-        Pos energy_pos = get_energy(state, i);
-        int distance = abs(get_x(energy_pos) - get_x(start_pos)) + abs(get_y(energy_pos) - get_y(start_pos));
-
-        if (closest_distance == -1 || distance < closest_distance)
+        for (int x = 0; x < map_properties.width; x++)
         {
-            closest_distance = distance;
-            closest_energy_cell_pos = energy_pos;
+            Pos pos = get_pos_from_map_coord(x, y);
+            if (get_cell(state, pos) != CELL_ENERGY)
+                continue;
+            int distance = abs(get_x(pos) - get_x(start_pos)) + abs(get_y(pos) - get_y(start_pos));
+            if (closest_distance == -1 || distance < closest_distance)
+            {
+                closest_distance = distance;
+                closest_energy_cell_pos = pos;
+            }
         }
     }
 
@@ -2116,6 +2112,7 @@ void parse_turn_inputs(State &state)
 {
     int energy_count;
     cin >> energy_count;
+    initial_energy_count = energy_count;
     for (int i = 0; i < energy_count; i++)
     {
         int x, y;
@@ -2124,8 +2121,8 @@ void parse_turn_inputs(State &state)
         // Convert map coordinates to internal data structure coordinates
         Pos pos = get_pos_from_map_coord(x, y);
 
-        set_energy(state, i, pos);
-        set_cell(state, state.energies[i], CELL_ENERGY);
+        initial_energies[i] = pos;
+        set_cell(state, pos, CELL_ENERGY);
     }
     set_energy_count(state, energy_count);
 
