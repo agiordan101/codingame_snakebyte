@@ -66,6 +66,7 @@
 //       - Lever le try catch
 //       - hyper paramètre au début
 //  rc-2 - Transform structs int to uint8
+//  rc-3 - Remove chronos & warnings
 
 #undef _GLIBCXX_DEBUG
 #pragma GCC optimize("Ofast,unroll-loops,omit-frame-pointer,inline")
@@ -450,17 +451,9 @@ void remove_energy(State &state)
     state.energy_count--;
 }
 
-int revert_last_move_time = 0;
-int revert_last_move_count = 0;
 void revert_last_move(State &last_state, State &state)
 {
-    auto start_chrono = chrono::high_resolution_clock::now();
-
     memcpy(&state, &last_state, SIZE_OF_STATE);
-
-    auto end_chrono = chrono::high_resolution_clock::now();
-    revert_last_move_time += chrono::duration_cast<chrono::microseconds>(end_chrono - start_chrono).count();
-    revert_last_move_count++;
 }
 
 int count_player_points(State &state, uint8_t player_id);
@@ -653,12 +646,8 @@ int generate_snake_moves(State &state, Snake &snake, Pos moves[3])
     return move_count;
 }
 
-int generate_player_movesets_time = 0;
-int generate_player_movesets_count = 0;
 int generate_player_movesets(State &state, uint8_t player_id, MoveSet movesets[MAX_PLAYER_MOVE_SETS])
 {
-    auto start_chrono = chrono::high_resolution_clock::now();
-
     uint8_t snake_count = get_player_alive_snake_count(state, player_id);
     uint8_t snake_ids[snake_count];
 
@@ -728,9 +717,6 @@ int generate_player_movesets(State &state, uint8_t player_id, MoveSet movesets[M
             break;
     }
 
-    auto end_chrono = chrono::high_resolution_clock::now();
-    generate_player_movesets_time += chrono::duration_cast<chrono::microseconds>(end_chrono - start_chrono).count();
-    generate_player_movesets_count++;
     return moveset_count;
 }
 
@@ -989,12 +975,8 @@ bool apply_snake_gravity(State &state, Snake &snake)
     return gravity_applied;
 }
 
-int apply_gravity_time = 0;
-int apply_gravity_count = 0;
 void apply_gravity(State &state)
 {
-    auto start_chrono = chrono::high_resolution_clock::now();
-
     int gravity_finalized_count = 0;
     int snake_index = 0;
 
@@ -1014,18 +996,10 @@ void apply_gravity(State &state)
         if (++snake_index >= get_alive_snake_count(state))
             snake_index = 0;
     }
-
-    auto end_chrono = chrono::high_resolution_clock::now();
-    apply_gravity_time += chrono::duration_cast<chrono::microseconds>(end_chrono - start_chrono).count();
-    apply_gravity_count++;
 }
 
-int apply_moveset_time = 0;
-int apply_moveset_count = 0;
 void apply_moveset(State &state, MoveSet &moveset)
 {
-    auto start_chrono = chrono::high_resolution_clock::now();
-
     set_turn(state, get_turn(state) + 1);
 
     Pos eaten_energies[MAX_SNAKE_COUNT];
@@ -1048,10 +1022,6 @@ void apply_moveset(State &state, MoveSet &moveset)
         get_player_alive_snake_count(state, map_properties.opp_id) == 0 ||
         get_energy_count(state) == 0)
         set_game_ended(state);
-
-    auto end_chrono = chrono::high_resolution_clock::now();
-    apply_moveset_time += chrono::duration_cast<chrono::microseconds>(end_chrono - start_chrono).count();
-    apply_moveset_count++;
 }
 
 /* --- DECISION MAKING --- */
@@ -1122,12 +1092,8 @@ int evaluate_end_states(State &state, uint8_t player_id, int player_points, int 
     return 0;
 }
 
-int evaluate_state_time = 0;
-int evaluate_state_count = 0;
 float evaluate_state(State &state, uint8_t player_id)
 {
-    auto start_chrono = chrono::high_resolution_clock::now();
-
     int player_points;
     int opponent_points;
     if (player_id == map_properties.my_id)
@@ -1203,20 +1169,12 @@ float evaluate_state(State &state, uint8_t player_id)
     // Multiply dist so distance=1 doesn't be equivalent to a game point
     float dist_score = dist_sum != 0 ? 1.0 / (2 * dist_sum) : 0.0;
 
-    auto end_chrono = chrono::high_resolution_clock::now();
-    evaluate_state_time += chrono::duration_cast<chrono::microseconds>(end_chrono - start_chrono).count();
-    evaluate_state_count++;
-
     // Game points is positive if it's good for the player, negative if it's good for its opponent, so we invert it for opponent evaluation
     return player_points - opponent_points + dist_score;
 }
 
-int choose_best_player_moveset_time = 0;
-int choose_best_player_moveset_count = 0;
 MoveSet choose_best_player_moveset(State &state, uint8_t player_id, MoveSet &previous_player_moveset)
 {
-    auto start_chrono = chrono::high_resolution_clock::now();
-
     State next_state;
 
     MoveSet movesets[MAX_PLAYER_MOVE_SETS];
@@ -1239,9 +1197,6 @@ MoveSet choose_best_player_moveset(State &state, uint8_t player_id, MoveSet &pre
         }
     }
 
-    auto end_chrono = chrono::high_resolution_clock::now();
-    choose_best_player_moveset_time += chrono::duration_cast<chrono::microseconds>(end_chrono - start_chrono).count();
-    choose_best_player_moveset_count++;
     return best_moveset;
 }
 
@@ -1282,12 +1237,8 @@ bool has_exceeded_time_limit(auto &start_chrono, int maximum_microseconds)
     return chrono::duration_cast<chrono::microseconds>(current_chrono - start_chrono).count() >= maximum_microseconds;
 }
 
-int move_candidates_in_beam_states_time = 0;
-int move_candidates_in_beam_states_count = 0;
 void move_candidates_in_beam_states(std::vector<State> &beam_search_states, std::priority_queue<State, std::vector<State>, CompareState> &beam_search_candidates)
 {
-    auto start_chrono = chrono::high_resolution_clock::now();
-
     // Move candidate states one by one into the beam_search state vector
     beam_search_states.clear();
     while (!beam_search_candidates.empty())
@@ -1306,20 +1257,13 @@ void move_candidates_in_beam_states(std::vector<State> &beam_search_states, std:
         {
             return get_heuristic(a) > get_heuristic(b);
         });
-
-    auto end_chrono = chrono::high_resolution_clock::now();
-    move_candidates_in_beam_states_time += chrono::duration_cast<chrono::microseconds>(end_chrono - start_chrono).count();
-    move_candidates_in_beam_states_count++;
 }
 
-int consider_state_to_be_candidate_time = 0;
-int consider_state_to_be_candidate_count = 0;
 void consider_state_to_be_candidate(State &state, MoveSet &last_moveset, priority_queue<State, std::vector<State>, CompareState> &beam_search_candidates, int beam_width)
 {
-    auto start_chrono = chrono::high_resolution_clock::now();
     beam_search_visited_states_count++;
 
-    if (beam_search_candidates.size() < beam_width)
+    if ((int)beam_search_candidates.size() < beam_width)
     {
         // Save the candidate moveset for the current game turn choice
         // Can only happen here because max_moveset_count < beam_width, so we're not comparing heuristic on the first turn
@@ -1334,18 +1278,10 @@ void consider_state_to_be_candidate(State &state, MoveSet &last_moveset, priorit
         beam_search_candidates.pop();       // Remove the worst state
         beam_search_candidates.push(state); // Add the new state
     }
-
-    auto end_chrono = chrono::high_resolution_clock::now();
-    consider_state_to_be_candidate_time += chrono::duration_cast<chrono::microseconds>(end_chrono - start_chrono).count();
-    consider_state_to_be_candidate_count++;
 }
 
-int find_candidates_among_state_children_time = 0;
-int find_candidates_among_state_children_count = 0;
 void find_candidates_among_state_children(State &state, uint8_t player_id, std::priority_queue<State, std::vector<State>, CompareState> &beam_search_candidates, int beam_width)
 {
-    auto start_chrono = chrono::high_resolution_clock::now();
-
     MoveSet turn_beginning_moveset = {};
     set_moveset_move_count(turn_beginning_moveset, 0);
 
@@ -1378,10 +1314,6 @@ void find_candidates_among_state_children(State &state, uint8_t player_id, std::
 
         consider_state_to_be_candidate(next_state, ally_movesets[i], beam_search_candidates, beam_width);
     }
-
-    auto end_chrono = chrono::high_resolution_clock::now();
-    find_candidates_among_state_children_time += chrono::duration_cast<chrono::microseconds>(end_chrono - start_chrono).count();
-    find_candidates_among_state_children_count++;
 }
 
 const State &get_best_candidate(std::priority_queue<State, std::vector<State>, CompareState>
@@ -1673,51 +1605,6 @@ int main()
 
         fprintf(stderr, "\nStates visited this turn: %d\n", beam_search_visited_states_count);
         fprintf(stderr, "Avg visited states: %d\n", (int)beam_search_average_states_visited);
-
-        // fprintf(stderr, "\nchoose_best_player_moveset() - time : %d ys\n", choose_best_player_moveset_time);
-        // fprintf(stderr, "choose_best_player_moveset() - count : %d\n", choose_best_player_moveset_count);
-        // fprintf(stderr, "choose_best_player_moveset() - t/call: %f ys\n", choose_best_player_moveset_time / (float)choose_best_player_moveset_count);
-
-        // fprintf(stderr, "\ngenerate_player_movesets() - time : %d ys\n", generate_player_movesets_time);
-        // fprintf(stderr, "generate_player_movesets() - count : %d\n", generate_player_movesets_count);
-        // fprintf(stderr, "generate_player_movesets() - t/call: %f ys\n", generate_player_movesets_time / (float)generate_player_movesets_count);
-
-        // fprintf(stderr, "\nrevert_last_move() - time : %d ys\n", revert_last_move_time);
-        // fprintf(stderr, "revert_last_move() - count : %d\n", revert_last_move_count);
-        // fprintf(stderr, "revert_last_move() - t/call: %f ys\n", revert_last_move_time / (float)revert_last_move_count);
-
-        // fprintf(stderr, "\napply_moveset() - time : %d ys\n", apply_moveset_time);
-        // fprintf(stderr, "apply_moveset() - count : %d\n", apply_moveset_count);
-        // fprintf(stderr, "apply_moveset() - t/call: %f ys\n", apply_moveset_time / (float)apply_moveset_count);
-
-        // fprintf(stderr, "\napply_gravity() - time : %d ys\n", apply_gravity_time);
-        // fprintf(stderr, "apply_gravity() - count : %d\n", apply_gravity_count);
-        // fprintf(stderr, "apply_gravity() - t/call: %f ys\n", apply_gravity_time / (float)apply_gravity_count);
-
-        // fprintf(stderr, "\nbfs_iterative() - time : %d ys\n", bfs_iterative_time);
-        // fprintf(stderr, "bfs_iterative() - count : %d\n", bfs_iterative_count);
-        // fprintf(stderr, "bfs_iterative() - t/call: %f ys\n", bfs_iterative_time / (float)bfs_iterative_count);
-
-        // fprintf(stderr, "\nbfs_recursive() - time : %d ys\n", bfs_recursive_time);
-        // fprintf(stderr, "bfs_recursive() - count : %d\n", bfs_recursive_count);
-        // fprintf(stderr, "bfs_recursive() - t/call: %f ys\n", bfs_recursive_time / (float)bfs_recursive_count);
-
-        // fprintf(stderr, "\nevaluate_state() - time : %d ys\n", evaluate_state_time);
-        // fprintf(stderr, "evaluate_state() - count : %d\n", evaluate_state_count);
-        // fprintf(stderr, "evaluate_state() - t/call: %f ys\n", evaluate_state_time / (float)evaluate_state_count);
-
-        // fprintf(stderr, "\nmove_candidates_in_beam_states() - time : %d ys\n", move_candidates_in_beam_states_time);
-        // fprintf(stderr, "move_candidates_in_beam_states() - count : %d\n", move_candidates_in_beam_states_count);
-        // fprintf(stderr, "move_candidates_in_beam_states() - t/call: %f ys\n", move_candidates_in_beam_states_time / (float)move_candidates_in_beam_states_count);
-
-        // fprintf(stderr, "\nconsider_state_to_be_candidate() - time : %d ys\n", consider_state_to_be_candidate_time);
-        // fprintf(stderr, "consider_state_to_be_candidate() - count : %d\n", consider_state_to_be_candidate_count);
-        // fprintf(stderr, "consider_state_to_be_candidate() - t/call: %f ys\n", consider_state_to_be_candidate_time / (float)consider_state_to_be_candidate_count);
-
-        // fprintf(stderr, "\nfind_candidates_among_state_children() - time : %d ys\n", find_candidates_among_state_children_time);
-        // fprintf(stderr, "find_candidates_among_state_children() - count : %d\n", find_candidates_among_state_children_count);
-        // fprintf(stderr, "find_candidates_among_state_children() - t/call: %f ys\n", find_candidates_among_state_children_time / (float)find_candidates_among_state_children_count);
-
 
         for (int i = 0; i < (int)get_moveset_move_count(best_moveset); i++)
         {

@@ -64,13 +64,10 @@ sh create_arena.sh
 ## TODO
 
 - Version finale :
-    - Remove warnings
-    - Time merge_movesets and use memcpy
     - Retest de générer les moves d'inertie quand il n'y en as pas de valide
         - Faire attention lorsqu'un snake n'a aucun move :
             - Recroqueville sur lui même
             - Bord de map bloqué par un autre
-    - Lever les compteurs
 
     1. Bitboard pour les cells (gain ~800 bytes) ?
 
