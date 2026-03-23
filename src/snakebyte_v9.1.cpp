@@ -62,6 +62,7 @@
 //  v9 - New heuristic: Add big bonuses when a snake can reach an energy from its first support cell (Head dist in priority then support dist). If not add bonus with support dist in priority then head dist.
 //      & fix gravity signals
 //      & fix collisions when one player only moved
+//      v9.1 - Remove energies pos from State : 2972 -> 2772 bytes
 
 #undef _GLIBCXX_DEBUG
 #pragma GCC optimize("Ofast,unroll-loops,omit-frame-pointer,inline")
