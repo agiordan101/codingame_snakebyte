@@ -64,11 +64,11 @@ sh create_arena.sh
 ## TODO
 
 - Version finale :
-    - Lever les compteurs
-    - Lever les logging
-    - Lever les exit(0)
     - Lever les fonctions inutiles
     - Lever le try catch
+    - Lever les exit(0)
+    - Lever les logging
+    - Lever les compteurs
     - hyper paramètre au début
     - Finetuning BS width
     - Alléger la data structure de State avec des int8 par exemple
