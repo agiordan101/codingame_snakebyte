@@ -18,5 +18,9 @@ cg-colosseum submit --env myarena13 --name v5.10 ./src/snakebyte_v5.10.cpp
 cg-colosseum submit --env myarena13 --name v9.1 ./src/snakebyte_v9.1.cpp
 cg-colosseum submit --env myarena13 --name v9.2 ./src/snakebyte_v9.2.cpp
 cg-colosseum submit --env myarena13 --name v9.3 ./src/snakebyte_v9.3.cpp
+cg-colosseum submit --env myarena13 --name v9.4 ./src/snakebyte_v9.3.cpp
+cg-colosseum submit --env myarena13 --name v9.5 ./src/snakebyte_v9.3.cpp
+cg-colosseum submit --env myarena13 --name v9.6 ./src/snakebyte_v9.3.cpp
+cg-colosseum submit --env myarena13 --name v9.7 ./src/snakebyte_v9.3.cpp
 
 cg-colosseum arena myarena13 -t 6
