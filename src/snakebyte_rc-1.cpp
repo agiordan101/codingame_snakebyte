@@ -87,27 +87,44 @@
 
 using namespace std;
 
-constexpr float BS_EXP_FACTOR = 0.99;
-constexpr int BS_WIDTH = 100;
-constexpr int BS_MAX_DEPTH = 50;
-constexpr int BS_MAX_TIME = 30000;
-
-using Pos = int16_t; // 1 dimension coordinate in map (y * width + x)
-
-constexpr size_t SIZE_OF_POS = sizeof(Pos);
 constexpr size_t SIZE_OF_INT = sizeof(int);
-
-/* --- MAPPROPERTIES --- */
 
 constexpr int MAX_MAP_WIDTH = 45;
 constexpr int MAX_MAP_HEIGHT = 30;
-
 constexpr int MAP_PADDING = 2;
 constexpr int MAX_WIDTH = MAX_MAP_WIDTH + 2 * MAP_PADDING;
 constexpr int MAX_HEIGHT = MAX_MAP_HEIGHT + 2 * MAP_PADDING;
 constexpr int MAX_CELL_COUNT = MAX_WIDTH * MAX_HEIGHT;
 
+using Pos = int16_t; // 1 dimension coordinate in map (y * width + x)
+constexpr size_t SIZE_OF_POS = sizeof(Pos);
+
+constexpr Pos NORTH_POS_OFFSET = -MAX_WIDTH;
+constexpr Pos WEST_POS_OFFSET = -1;
+constexpr Pos EAST_POS_OFFSET = 1;
+constexpr Pos SOUTH_POS_OFFSET = MAX_WIDTH;
+
+using CellType = u_int8_t; // 0-7: snake_id, 8: CELL_EMPTY, 9: CELL_PLATFORM, 10: CELL_ENERGY
+constexpr CellType CELL_EMPTY = 8;
+constexpr CellType CELL_PLATFORM = 9;
+constexpr CellType CELL_ENERGY = 10;
+
+constexpr int constexpr_pow(int base, int exp) { return exp == 0 ? 1 : base * constexpr_pow(base, exp - 1); }
+constexpr int MAX_SNAKE_COUNT = 8;
+constexpr int MAX_PLAYER_SNAKE_COUNT = MAX_SNAKE_COUNT / 2;
+constexpr int MAX_PLAYER_MOVE_SETS = constexpr_pow(3, MAX_PLAYER_SNAKE_COUNT); // Max move combinaisons for one player
+
 constexpr int MAX_ENERGY_COUNT = 100;
+constexpr int MAX_SNAKE_SIZE = MAX_ENERGY_COUNT + 3;
+constexpr int DIR_ARRAY_SIZE = MAX_SNAKE_SIZE - 1; // 99 bytes for 99 directions
+
+constexpr int BS_MAX_TIME = 30000;
+constexpr int BS_MAX_DEPTH = 50;
+constexpr float BS_EXP_FACTOR = 0.99;
+constexpr int BS_WIDTH = 100;
+constexpr int BS_MAX_CHILD_STATES = BS_WIDTH * MAX_PLAYER_MOVE_SETS;
+
+/* --- MAPPROPERTIES --- */
 
 struct MapProperties
 {
@@ -121,11 +138,6 @@ static MapProperties map_properties;
 
 /* --- POS --- */
 
-constexpr Pos NORTH_POS_OFFSET = -MAX_WIDTH;
-constexpr Pos WEST_POS_OFFSET = -1;
-constexpr Pos EAST_POS_OFFSET = 1;
-constexpr Pos SOUTH_POS_OFFSET = MAX_WIDTH;
-
 Pos get_pos(int x, int y) { return y * MAX_WIDTH + x; }
 Pos get_pos_from_map_coord(int x, int y) { return (y + MAP_PADDING) * MAX_WIDTH + (x + MAP_PADDING); }
 
@@ -135,31 +147,6 @@ int get_map_x(Pos pos) { return get_x(pos) - MAP_PADDING; }
 int get_map_y(Pos pos) { return get_y(pos) - MAP_PADDING; }
 
 /* --- SNAKE --- */
-
-constexpr int MAX_SNAKE_SIZE = 100;
-constexpr int MAX_SNAKE_COUNT = 8;
-constexpr int MAX_PLAYER_SNAKE_COUNT = MAX_SNAKE_COUNT / 2;
-
-// Direction encoding: 1 byte per segment (head→tail chain)
-// Uses more memory than 2-bit packing (99 vs 25 bytes) but allows memmove for O(n) shifts
-constexpr uint8_t DIR_NORTH = 0;
-constexpr uint8_t DIR_SOUTH = 1;
-constexpr uint8_t DIR_WEST = 2;
-constexpr uint8_t DIR_EAST = 3;
-constexpr int DIR_ARRAY_SIZE = MAX_SNAKE_SIZE - 1; // 99 bytes for 99 directions
-
-static const Pos DIR_TO_OFFSET[4] = {NORTH_POS_OFFSET, SOUTH_POS_OFFSET, WEST_POS_OFFSET, EAST_POS_OFFSET};
-
-inline uint8_t pos_offset_to_dir(Pos offset)
-{
-    if (offset == NORTH_POS_OFFSET)
-        return DIR_NORTH;
-    if (offset == SOUTH_POS_OFFSET)
-        return DIR_SOUTH;
-    if (offset == WEST_POS_OFFSET)
-        return DIR_WEST;
-    return DIR_EAST;
-}
 
 struct Snake
 {
@@ -171,20 +158,22 @@ struct Snake
     uint8_t directions[DIR_ARRAY_SIZE]; // 1 byte per segment: direction from segment[i] to segment[i+1]
 };
 
+// Direction encoding: 1 byte per segment (head→tail chain)
+// Uses more memory than 2-bit packing (99 vs 25 bytes) but allows memmove for O(n) shifts
+constexpr uint8_t DIR_NORTH = 0;
+constexpr uint8_t DIR_SOUTH = 1;
+constexpr uint8_t DIR_WEST = 2;
+constexpr uint8_t DIR_EAST = 3;
+static const Pos DIR_TO_OFFSET[4] = {NORTH_POS_OFFSET, SOUTH_POS_OFFSET, WEST_POS_OFFSET, EAST_POS_OFFSET};
+
 int get_snake_id(Snake &snake) { return snake.id; }
 int get_snake_player_id(Snake &snake) { return snake.player_id; }
-
-// Direction helpers (1 byte per direction — direct array access)
+Pos get_snake_head_pos(Snake &snake) { return snake.head_pos; }
+int get_snake_body_length(Snake &snake) { return snake.body_length; }
 inline uint8_t get_direction(Snake &snake, int index)
 {
     return snake.directions[index];
 }
-
-inline void set_direction(Snake &snake, int index, uint8_t dir)
-{
-    snake.directions[index] = dir;
-}
-
 Pos get_snake_body_pos(Snake &snake, int index)
 {
     Pos pos = snake.head_pos;
@@ -193,9 +182,20 @@ Pos get_snake_body_pos(Snake &snake, int index)
     return pos;
 }
 
-Pos get_snake_head_pos(Snake &snake) { return snake.head_pos; }
-int get_snake_body_length(Snake &snake) { return snake.body_length; }
-
+inline void set_direction(Snake &snake, int index, uint8_t dir)
+{
+    snake.directions[index] = dir;
+}
+inline uint8_t pos_offset_to_dir(Pos offset)
+{
+    if (offset == NORTH_POS_OFFSET)
+        return DIR_NORTH;
+    if (offset == SOUTH_POS_OFFSET)
+        return DIR_SOUTH;
+    if (offset == WEST_POS_OFFSET)
+        return DIR_WEST;
+    return DIR_EAST;
+}
 void set_snake_body_pos(Snake &snake, int index, Pos new_pos)
 {
     if (index == 0)
@@ -233,7 +233,6 @@ void set_snake_body_pos(Snake &snake, int index, Pos new_pos)
             snake.tail_pos = new_pos;
     }
 }
-
 void set_snake_body_length(Snake &snake, int length) { snake.body_length = length; }
 
 void add_body_pos(Snake &snake, Pos pos)
@@ -250,7 +249,6 @@ void add_body_pos(Snake &snake, Pos pos)
     snake.tail_pos = pos;
     snake.body_length++;
 }
-
 void remove_snake_head(Snake &snake)
 {
     // New head = old head + direction[0]
@@ -262,12 +260,10 @@ void remove_snake_head(Snake &snake)
     snake.body_length--;
     // tail_pos unchanged (we removed the head, tail stays)
 }
-
 void reset_snake_length(Snake &snake) { snake.body_length = 0; }
-
-// Move all body segments by a uniform offset (used by gravity)
 void shift_snake_body(Snake &snake, Pos offset)
 {
+    // Move all body segments by a uniform offset (used by gravity)
     snake.head_pos += offset;
     snake.tail_pos += offset;
     // Directions don't change since all segments move by the same offset
@@ -308,9 +304,6 @@ Pos get_move_dst_pos(Move &move) { return move.dst_pos; }
 void set_move_snake_id(Move &move, int id) { move.snake_id = id; }
 void set_move_dst_pos(Move &move, Pos pos) { move.dst_pos = pos; }
 
-constexpr int constexpr_pow(int base, int exp) { return exp == 0 ? 1 : base * constexpr_pow(base, exp - 1); }
-constexpr int MAX_PLAYER_MOVE_SETS = constexpr_pow(3, MAX_PLAYER_SNAKE_COUNT); // Max move combinaisons for one player
-
 struct MoveSet
 {
     Move moves[MAX_SNAKE_COUNT];
@@ -332,12 +325,6 @@ void print_moveset(MoveSet moveset)
 }
 
 /* --- STATE --- */
-
-using CellType = u_int8_t; // 0-7: snake_id, 8: CELL_EMPTY, 9: CELL_PLATFORM, 10: CELL_ENERGY
-
-constexpr CellType CELL_EMPTY = 8;
-constexpr CellType CELL_PLATFORM = 9;
-constexpr CellType CELL_ENERGY = 10;
 
 struct State
 {
