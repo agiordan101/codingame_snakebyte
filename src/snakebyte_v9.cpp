@@ -1558,8 +1558,8 @@ float evaluate_state(State &state, int player_id, Pos *snake_targets, bool loggi
             {
                 // No energy are reachable from this body support
                 // Goal: Look for a better support point, while minimizing the distance between the head and the energy
-                // int score = encode_lexicographic_priority(body_support_to_closest_energy_dist, head_to_energy_dist, ratio_between_score_dists);
-                int score = encode_lexicographic_priority(head_to_energy_dist, body_support_to_closest_energy_dist, ratio_between_score_dists);
+                int score = encode_lexicographic_priority(body_support_to_closest_energy_dist, head_to_energy_dist, ratio_between_score_dists);
+                // int score = encode_lexicographic_priority(head_to_energy_dist, body_support_to_closest_energy_dist, ratio_between_score_dists);
                 // int score = body_support_to_closest_energy_dist;
                 // int score = head_to_energy_dist;
                 support_search_score += score;
@@ -1577,28 +1577,33 @@ float evaluate_state(State &state, int player_id, Pos *snake_targets, bool loggi
         // TODO: Look for the closest support point that offer an accessible energy for this snake
     }
 
-    int lexicographic_result = encode_lexicographic_priority(support_search_score, reachable_energy_score, ratio_between_scores);
-    float dist_score = 1.0f / (float)(1 + lexicographic_result);
-
-    if (logging)
-    {
-        fprintf(stderr, "Reachable energy score: %d, Support search score: %d, Lexicographic result: %d, Dist score: %f\n", reachable_energy_score, support_search_score, lexicographic_result, dist_score);
-    }
-
-    // reachable_energy_score = 1.0f / (1 + reachable_energy_score);
-    // support_search_score = 0.1f / (1 + support_search_score);
+    // int lexicographic_result = encode_lexicographic_priority(support_search_score, reachable_energy_score, ratio_between_scores);
+    // float dist_score = 1.0f / (float)(1 + lexicographic_result);
 
     // if (logging)
     // {
-    //     fprintf(stderr, "Reachable energy score: %d, Support search score: %d\n", reachable_energy_score, support_search_score);
+    //     fprintf(stderr, "Reachable energy score: %d, Support search score: %d, Lexicographic result: %d, Dist score: %f\n", reachable_energy_score, support_search_score, lexicographic_result, dist_score);
     // }
+
+    // If no reachable energy, set score to 0. Else increase the score if the energy is closer.
+    if (reachable_energy_score > 0)
+    reachable_energy_score = 1.0f / (1 + reachable_energy_score);
+    
+    // If no support search score, don't affect the score with this metric
+    if (support_search_score > 0)
+        support_search_score = 0.1f / (1 + support_search_score);
+
+    if (logging)
+    {
+        fprintf(stderr, "Reachable energy score: %f, Support search score: %f\n", reachable_energy_score, support_search_score);
+    }
 
     auto end_chrono = chrono::high_resolution_clock::now();
     evaluate_state_time += chrono::duration_cast<chrono::microseconds>(end_chrono - start_chrono).count();
     evaluate_state_count++;
 
-    // return player_points - opponent_points + reachable_energy_score + support_search_score;
-    return player_points - opponent_points + dist_score;
+    return player_points - opponent_points + reachable_energy_score + support_search_score;
+    // return player_points - opponent_points + dist_score;
 }
 
 int choose_best_player_moveset_time = 0;
