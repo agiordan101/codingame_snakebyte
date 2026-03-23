@@ -53,6 +53,7 @@
 //  v7 - Rework beam search state data structures : Use 2 static state arrays and nth_element instead of vector and priority_queue
 //      v7.1 - Don't generate move on platforms
 //      v7.2 - Fix platform bonuses (was not working)
+//  v9 - New heuristic: Add big bonuses when a snake can reach an energy from its first support cell (Head dist in priority then support dist). If not add bonus with support dist in priority then head dist.
 
 #undef _GLIBCXX_DEBUG
 #pragma GCC optimize("Ofast,unroll-loops,omit-frame-pointer,inline")
