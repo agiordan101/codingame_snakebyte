@@ -94,10 +94,6 @@ sh create_arena.sh
 - Move ocnstexpr at the beginning as v8 versions
 
 Tester d'autres heuristic :
-    The evaluation computes player_points - opponent_points +
-  reachable_energy_score + support_search_score but only for the player's
-  snakes. Adding a penalty for the opponent's reachable_energy_score would make
-   the evaluation correctly represent the relative positioning advantage
 
 - AMELIORATION: Pour chaque support : Trouver le plus proche qui permet au snake de longueur X dy arriver. Récursivement ? Chaque support serait une node dans un graph de déplacements. Les support espacé d'une distance inférieur à la taille du snake sont connecté dans le graph.
 
@@ -113,10 +109,7 @@ Tester d'autres heuristic :
 - Créer une lookup table permettant de connaitre les distances/énergies accessible via chaque cases, pour chaque snake size entre 3 et 8/10. Utiliser un BFS avec gravité qui parcourt toute les cases 1 fois
     
 - A faire après le beam search, pour correctement évaluer l'amélioration du ratio temps/précision de l'heuristic : Faire un nouveau DFS qui prends en compte la gravité et son body :
-    On prends l'état actuel
-    On fait bouger que ce snake
     en v1: On considère une seule fois les cases où la tête est passée
-    en v1: On shift les pos du body ?
 
 
 Algorithm optimisations :
@@ -125,11 +118,6 @@ Algorithm optimisations :
     - Cell change history: Each cell change is stored in order. undo_move would reapply them in reserve order
 2. bitboards ou compaction ou reduction de la taille de State
 3. Regarder "partial sort buffer"
-4. Réflechir à conserver que des pointeurs avec leur heuristic. Et un State buffer[width] réutilisable
-
-
-POinters instead of state copy :
-    Short-term minimal change: store pointers (or std::unique_ptr<State>) in your candidate list instead of copying whole State. Alternatively, only push the heuristic + MoveSet first_depth_moveset + a compact representation of the state (e.g., differences). The quickest patch is to store std::shared_ptr<State> or std::unique_ptr<State>.
 
 
 ## Strategies

@@ -1,5 +1,5 @@
 # Define the binary name as a variable
-TARGET = snakebyte_v9.2
+TARGET = snakebyte_v9.3
 SRC_FILE = ./src/$(TARGET).cpp
 BIN_FILE = ./bin/$(TARGET)
 
