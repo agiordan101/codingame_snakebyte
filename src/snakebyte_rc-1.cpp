@@ -88,7 +88,7 @@
 using namespace std;
 
 constexpr float BS_EXP_FACTOR = 0.99;
-constexpr int BS_WIDTH = 150;
+constexpr int BS_WIDTH = 100;
 constexpr int BS_MAX_DEPTH = 50;
 constexpr int BS_MAX_TIME = 30000;
 
@@ -734,19 +734,6 @@ int generate_player_movesets(State &state, int player_id, MoveSet movesets[MAX_P
             break;
     }
 
-    // fprintf(stderr, "generate_player_movesets: %d snakes :\n", snake_count);
-    // for (int i = 0; i < snake_count; i++)
-    //     fprintf(stderr, "generate_player_movesets: - Snake %d: %d moves\n", i, snake_move_counts[i]);
-
-    // fprintf(stderr, "generate_player_movesets: %d movesets generated :\n", moveset_count);
-    // for (int moveset_index = 0; moveset_index < moveset_count; moveset_index++)
-    // {
-    //     for (int snake_index = 0; snake_index < snake_count; snake_index++)
-    //     {
-    //         fprintf(stderr, "generate_player_movesets: - Move %d: Snake %d: %d %d\n", moveset_index, snake_index, get_map_x(movesets[moveset_index].moves[snake_index].dst_pos), get_map_y(movesets[moveset_index].moves[snake_index].dst_pos));
-    //     }
-    // }
-
     auto end_chrono = chrono::high_resolution_clock::now();
     generate_player_movesets_time += chrono::duration_cast<chrono::microseconds>(end_chrono - start_chrono).count();
     generate_player_movesets_count++;
@@ -780,7 +767,6 @@ MoveSet merge_movesets(MoveSet &moveset1, MoveSet &moveset2)
 
 void apply_move(State &state, Snake &snake, Move &move, Pos eaten_energies[MAX_SNAKE_COUNT], int *eaten_energy_count)
 {
-    // fprintf(stderr, "Applying move for snake %d: (%d, %d)\n", get_snake_id(snake), get_map_x(get_move_dst_pos(move)), get_map_y(get_move_dst_pos(move)));
     Pos new_head_pos = get_move_dst_pos(move);
 
     // Grow when eating energy
@@ -1238,7 +1224,6 @@ MoveSet choose_best_player_moveset(State &state, int player_id, MoveSet &previou
     auto start_chrono = chrono::high_resolution_clock::now();
 
     State next_state;
-    // fprintf(stderr, "Choosing move set for player %d ...\n", player_id);
 
     MoveSet movesets[MAX_PLAYER_MOVE_SETS];
     int moveset_count = generate_player_movesets(state, player_id, movesets);
@@ -1255,10 +1240,6 @@ MoveSet choose_best_player_moveset(State &state, int player_id, MoveSet &previou
         float evaluation = evaluate_state(next_state, player_id);
         if (best_evaluation < evaluation)
         {
-            // fprintf(stderr, "New best moveset found for player %d with evaluation %f: ", player_id, evaluation);
-            // print_moveset(turn_moveset);
-            // fprintf(stderr, "\n");
-
             best_evaluation = evaluation;
             best_moveset = movesets[i];
         }
@@ -1441,8 +1422,6 @@ MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam
     std::vector<State> beam_search_states;
     beam_search_states.reserve(beam_width);
 
-    fprintf(stderr, "Initialized beam_search_states with state children at depth=%d\n", beam_search_depth);
-
     while (!has_exceeded_time_limit(start_turn_chrono, maximum_microseconds) && beam_search_depth < depth_max)
     {
         beam_search_depth++;
@@ -1455,7 +1434,6 @@ MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam
             // Skip ended states, but consider keeping it in candidates state
             if (is_game_ended(state))
             {
-                // fprintf(stderr, "Game ended, considering state as candidate\n");
                 consider_state_to_be_candidate(state, get_first_depth_moveset(state), beam_search_candidates, beam_width);
                 continue;
             }
@@ -1472,35 +1450,11 @@ MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam
                 if (get_heuristic(beam_search_states[0]) > get_heuristic(best_candidate))
                 {
                     fprintf(stderr, "Previous beam search state is better than best candidate: h=%f\n", get_heuristic(beam_search_states[0]));
-
-                    if (is_game_ended(beam_search_states[0]))
-                    {
-                        fprintf(stderr, "========================================================\n");
-                        fprintf(stderr, "Game ended: Turn %d\n", get_turn(beam_search_states[0]));
-                        fprintf(stderr, "Game ended: Remaining energy cells = %d\n", get_energy_count(beam_search_states[0]));
-                        fprintf(stderr, "Game ended: My score = %d\n", count_player_points(beam_search_states[0], map_properties.my_id));
-                        fprintf(stderr, "Game ended: Opponent score = %d\n", count_player_points(beam_search_states[0], map_properties.opp_id));
-                        fprintf(stderr, "Game ended: My losses = %d\n", get_player_losses(beam_search_states[0], map_properties.my_id));
-                        fprintf(stderr, "Game ended: Opponent losses = %d\n", get_player_losses(beam_search_states[0], map_properties.opp_id));
-                        fprintf(stderr, "========================================================\n");
-                    }
                     return get_first_depth_moveset(beam_search_states[0]);
                 }
                 else
                 {
                     fprintf(stderr, "Best candidate is better than initial state: h=%f\n", get_heuristic(best_candidate));
-
-                    if (is_game_ended(best_candidate))
-                    {
-                        fprintf(stderr, "========================================================\n");
-                        fprintf(stderr, "Game ended: Turn %d\n", get_turn(best_candidate));
-                        fprintf(stderr, "Game ended: Remaining energy cells = %d\n", get_energy_count(best_candidate));
-                        fprintf(stderr, "Game ended: My score = %d\n", count_player_points(best_candidate, map_properties.my_id));
-                        fprintf(stderr, "Game ended: Opponent score = %d\n", count_player_points(best_candidate, map_properties.opp_id));
-                        fprintf(stderr, "Game ended: My losses = %d\n", get_player_losses(best_candidate, map_properties.my_id));
-                        fprintf(stderr, "Game ended: Opponent losses = %d\n", get_player_losses(best_candidate, map_properties.opp_id));
-                        fprintf(stderr, "========================================================\n");
-                    }
                     return get_first_depth_moveset(best_candidate);
                 }
             }
@@ -1724,25 +1678,25 @@ int main()
         fprintf(stderr, "\nStates visited this turn: %d\n", beam_search_visited_states_count);
         fprintf(stderr, "Avg visited states: %d\n", (int)beam_search_average_states_visited);
 
-        fprintf(stderr, "\nchoose_best_player_moveset() - time : %d ys\n", choose_best_player_moveset_time);
-        fprintf(stderr, "choose_best_player_moveset() - count : %d\n", choose_best_player_moveset_count);
-        fprintf(stderr, "choose_best_player_moveset() - t/call: %f ys\n", choose_best_player_moveset_time / (float)choose_best_player_moveset_count);
+        // fprintf(stderr, "\nchoose_best_player_moveset() - time : %d ys\n", choose_best_player_moveset_time);
+        // fprintf(stderr, "choose_best_player_moveset() - count : %d\n", choose_best_player_moveset_count);
+        // fprintf(stderr, "choose_best_player_moveset() - t/call: %f ys\n", choose_best_player_moveset_time / (float)choose_best_player_moveset_count);
 
-        fprintf(stderr, "\ngenerate_player_movesets() - time : %d ys\n", generate_player_movesets_time);
-        fprintf(stderr, "generate_player_movesets() - count : %d\n", generate_player_movesets_count);
-        fprintf(stderr, "generate_player_movesets() - t/call: %f ys\n", generate_player_movesets_time / (float)generate_player_movesets_count);
+        // fprintf(stderr, "\ngenerate_player_movesets() - time : %d ys\n", generate_player_movesets_time);
+        // fprintf(stderr, "generate_player_movesets() - count : %d\n", generate_player_movesets_count);
+        // fprintf(stderr, "generate_player_movesets() - t/call: %f ys\n", generate_player_movesets_time / (float)generate_player_movesets_count);
 
-        fprintf(stderr, "\nrevert_last_move() - time : %d ys\n", revert_last_move_time);
-        fprintf(stderr, "revert_last_move() - count : %d\n", revert_last_move_count);
-        fprintf(stderr, "revert_last_move() - t/call: %f ys\n", revert_last_move_time / (float)revert_last_move_count);
+        // fprintf(stderr, "\nrevert_last_move() - time : %d ys\n", revert_last_move_time);
+        // fprintf(stderr, "revert_last_move() - count : %d\n", revert_last_move_count);
+        // fprintf(stderr, "revert_last_move() - t/call: %f ys\n", revert_last_move_time / (float)revert_last_move_count);
 
-        fprintf(stderr, "\napply_moveset() - time : %d ys\n", apply_moveset_time);
-        fprintf(stderr, "apply_moveset() - count : %d\n", apply_moveset_count);
-        fprintf(stderr, "apply_moveset() - t/call: %f ys\n", apply_moveset_time / (float)apply_moveset_count);
+        // fprintf(stderr, "\napply_moveset() - time : %d ys\n", apply_moveset_time);
+        // fprintf(stderr, "apply_moveset() - count : %d\n", apply_moveset_count);
+        // fprintf(stderr, "apply_moveset() - t/call: %f ys\n", apply_moveset_time / (float)apply_moveset_count);
 
-        fprintf(stderr, "\napply_gravity() - time : %d ys\n", apply_gravity_time);
-        fprintf(stderr, "apply_gravity() - count : %d\n", apply_gravity_count);
-        fprintf(stderr, "apply_gravity() - t/call: %f ys\n", apply_gravity_time / (float)apply_gravity_count);
+        // fprintf(stderr, "\napply_gravity() - time : %d ys\n", apply_gravity_time);
+        // fprintf(stderr, "apply_gravity() - count : %d\n", apply_gravity_count);
+        // fprintf(stderr, "apply_gravity() - t/call: %f ys\n", apply_gravity_time / (float)apply_gravity_count);
 
         // fprintf(stderr, "\nbfs_iterative() - time : %d ys\n", bfs_iterative_time);
         // fprintf(stderr, "bfs_iterative() - count : %d\n", bfs_iterative_count);
@@ -1752,29 +1706,23 @@ int main()
         // fprintf(stderr, "bfs_recursive() - count : %d\n", bfs_recursive_count);
         // fprintf(stderr, "bfs_recursive() - t/call: %f ys\n", bfs_recursive_time / (float)bfs_recursive_count);
 
-        fprintf(stderr, "\nevaluate_state() - time : %d ys\n", evaluate_state_time);
-        fprintf(stderr, "evaluate_state() - count : %d\n", evaluate_state_count);
-        fprintf(stderr, "evaluate_state() - t/call: %f ys\n", evaluate_state_time / (float)evaluate_state_count);
+        // fprintf(stderr, "\nevaluate_state() - time : %d ys\n", evaluate_state_time);
+        // fprintf(stderr, "evaluate_state() - count : %d\n", evaluate_state_count);
+        // fprintf(stderr, "evaluate_state() - t/call: %f ys\n", evaluate_state_time / (float)evaluate_state_count);
 
-        fprintf(stderr, "\nmove_candidates_in_beam_states() - time : %d ys\n", move_candidates_in_beam_states_time);
-        fprintf(stderr, "move_candidates_in_beam_states() - count : %d\n", move_candidates_in_beam_states_count);
-        fprintf(stderr, "move_candidates_in_beam_states() - t/call: %f ys\n", move_candidates_in_beam_states_time / (float)move_candidates_in_beam_states_count);
+        // fprintf(stderr, "\nmove_candidates_in_beam_states() - time : %d ys\n", move_candidates_in_beam_states_time);
+        // fprintf(stderr, "move_candidates_in_beam_states() - count : %d\n", move_candidates_in_beam_states_count);
+        // fprintf(stderr, "move_candidates_in_beam_states() - t/call: %f ys\n", move_candidates_in_beam_states_time / (float)move_candidates_in_beam_states_count);
 
-        fprintf(stderr, "\nconsider_state_to_be_candidate() - time : %d ys\n", consider_state_to_be_candidate_time);
-        fprintf(stderr, "consider_state_to_be_candidate() - count : %d\n", consider_state_to_be_candidate_count);
-        fprintf(stderr, "consider_state_to_be_candidate() - t/call: %f ys\n", consider_state_to_be_candidate_time / (float)consider_state_to_be_candidate_count);
+        // fprintf(stderr, "\nconsider_state_to_be_candidate() - time : %d ys\n", consider_state_to_be_candidate_time);
+        // fprintf(stderr, "consider_state_to_be_candidate() - count : %d\n", consider_state_to_be_candidate_count);
+        // fprintf(stderr, "consider_state_to_be_candidate() - t/call: %f ys\n", consider_state_to_be_candidate_time / (float)consider_state_to_be_candidate_count);
 
-        fprintf(stderr, "\nfind_candidates_among_state_children() - time : %d ys\n", find_candidates_among_state_children_time);
-        fprintf(stderr, "find_candidates_among_state_children() - count : %d\n", find_candidates_among_state_children_count);
-        fprintf(stderr, "find_candidates_among_state_children() - t/call: %f ys\n", find_candidates_among_state_children_time / (float)find_candidates_among_state_children_count);
+        // fprintf(stderr, "\nfind_candidates_among_state_children() - time : %d ys\n", find_candidates_among_state_children_time);
+        // fprintf(stderr, "find_candidates_among_state_children() - count : %d\n", find_candidates_among_state_children_count);
+        // fprintf(stderr, "find_candidates_among_state_children() - t/call: %f ys\n", find_candidates_among_state_children_time / (float)find_candidates_among_state_children_count);
 
         print_marks(state, best_moveset);
-
-        if (get_moveset_move_count(best_moveset) == 0)
-        {
-            fprintf(stderr, "No best moveset found this turn !!!!!\n");
-            exit(0);
-        }
 
         for (int i = 0; i < get_moveset_move_count(best_moveset); i++)
         {

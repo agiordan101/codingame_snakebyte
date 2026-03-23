@@ -64,9 +64,7 @@ sh create_arena.sh
 ## TODO
 
 - Version finale :
-    - Lever les logging
     - hyper paramètre au début
-    - Finetuning BS width
     - Alléger la data structure de State avec des int8 par exemple
     - Retest de générer les moves d'inertie quand il n'y en as pas de valide
         - Faire attention lorsqu'un snake n'a aucun move :
@@ -167,9 +165,17 @@ MoveSet -> A list of Move
 
 ## History
 
+# v9.3
+
+Include opponent heuristic too
+
+League: Legend (max)
+First publication : 42/2326
+Last publication: -
+
 # v5.11
 
-Don't generate move on platforms & Fix platform bonuses (was not working)
+Include opponent heuristic too
 
 League: Legend (max)
 First publication : 48/2300
@@ -177,15 +183,19 @@ Last publication: -
 
 # v5.10
 
-Don't generate move on platforms & Fix platform bonuses (was not working)
+Remove energies pos from State : 2972 -> 2772 bytes
+    & fix gravity signals
+    & fix collisions when one player only moved
 
 League: Legend (max)
 First publication : 30/2277
-Last publication: 43/2300
+Last publication: 44/2300
 
 # v5.9
 
-Don't generate move on platforms & Fix platform bonuses (was not working)
+Replace int16 snakepos[100] into int8 directions[99]
+    & Refacto collision detection via la grille cells au lieu d'itérer les segments
+    & Réduit la taille du Snake de 212 à 116 bytes.
 
 League: Legend (max)
 First publication : 30/2215
@@ -193,7 +203,7 @@ Last publication: 55/2270
 
 # v5.7
 
-Don't generate move on platforms & Fix platform bonuses (was not working)
+Fix not working platform bonuses
 
 League: Legend (max)
 First publication : 82/2215
