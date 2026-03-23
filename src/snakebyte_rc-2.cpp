@@ -59,6 +59,13 @@
 //  v7 - Rework beam search state data structures : Use 2 static state arrays and nth_element instead of vector and priority_queue
 //      v7.1 - Don't generate move on platforms
 //      v7.2 - Fix platform bonuses (was not working)
+//  rc-1 - Finetuning BS width
+//       - Lever les logging
+//       - Lever les exit(0)
+//       - Lever les fonctions inutiles
+//       - Lever le try catch
+//       - hyper paramètre au début
+//  rc-2 - Transform structs int to uint8
 
 #undef _GLIBCXX_DEBUG
 #pragma GCC optimize("Ofast,unroll-loops,omit-frame-pointer,inline")
@@ -87,7 +94,7 @@
 
 using namespace std;
 
-constexpr size_t SIZE_OF_INT = sizeof(int);
+constexpr size_t SIZE_OF_UINT8 = sizeof(uint8_t);
 
 constexpr int MAX_MAP_WIDTH = 45;
 constexpr int MAX_MAP_HEIGHT = 30;
@@ -130,8 +137,8 @@ struct MapProperties
 {
     int width;
     int height;
-    int my_id;
-    int opp_id;
+    uint8_t my_id;
+    uint8_t opp_id;
 };
 
 static MapProperties map_properties;
@@ -150,11 +157,11 @@ int get_map_y(Pos pos) { return get_y(pos) - MAP_PADDING; }
 
 struct Snake
 {
-    int id;
-    int player_id;
+    uint8_t id;
+    uint8_t player_id;
     Pos head_pos;
     Pos tail_pos; // cached for O(1) tail access in apply_move
-    int body_length;
+    uint8_t body_length;
     uint8_t directions[DIR_ARRAY_SIZE]; // 1 byte per segment: direction from segment[i] to segment[i+1]
 };
 
@@ -166,10 +173,10 @@ constexpr uint8_t DIR_WEST = 2;
 constexpr uint8_t DIR_EAST = 3;
 static const Pos DIR_TO_OFFSET[4] = {NORTH_POS_OFFSET, SOUTH_POS_OFFSET, WEST_POS_OFFSET, EAST_POS_OFFSET};
 
-int get_snake_id(Snake &snake) { return snake.id; }
-int get_snake_player_id(Snake &snake) { return snake.player_id; }
+uint8_t get_snake_id(Snake &snake) { return snake.id; }
+uint8_t get_snake_player_id(Snake &snake) { return snake.player_id; }
 Pos get_snake_head_pos(Snake &snake) { return snake.head_pos; }
-int get_snake_body_length(Snake &snake) { return snake.body_length; }
+uint8_t get_snake_body_length(Snake &snake) { return snake.body_length; }
 inline uint8_t get_direction(Snake &snake, int index)
 {
     return snake.directions[index];
@@ -233,7 +240,7 @@ void set_snake_body_pos(Snake &snake, int index, Pos new_pos)
             snake.tail_pos = new_pos;
     }
 }
-void set_snake_body_length(Snake &snake, int length) { snake.body_length = length; }
+void set_snake_body_length(Snake &snake, uint8_t length) { snake.body_length = length; }
 
 void add_body_pos(Snake &snake, Pos pos)
 {
@@ -256,7 +263,7 @@ void remove_snake_head(Snake &snake)
     // Shift directions left by 1 using memmove
     int remaining = snake.body_length - 2;
     if (remaining > 0)
-        memmove(&snake.directions[0], &snake.directions[1], remaining);
+        memmove(&snake.directions[0], &snake.directions[1], SIZE_OF_UINT8 * remaining);
     snake.body_length--;
     // tail_pos unchanged (we removed the head, tail stays)
 }
@@ -279,8 +286,8 @@ inline void reconstruct_body(Snake &snake, Pos *out)
 
 void initialize_snake_data(
     Snake &snake,
-    int snake_id,
-    int player_id)
+    uint8_t snake_id,
+    uint8_t player_id)
 {
     snake.id = snake_id;
     snake.player_id = player_id;
@@ -294,27 +301,27 @@ void initialize_snake_data(
 
 struct Move
 {
-    int snake_id;
+    uint8_t snake_id;
     Pos dst_pos;
 };
 
-int get_move_snake_id(Move &move) { return move.snake_id; }
+uint8_t get_move_snake_id(Move &move) { return move.snake_id; }
 Pos get_move_dst_pos(Move &move) { return move.dst_pos; }
 
-void set_move_snake_id(Move &move, int id) { move.snake_id = id; }
+void set_move_snake_id(Move &move, uint8_t id) { move.snake_id = id; }
 void set_move_dst_pos(Move &move, Pos pos) { move.dst_pos = pos; }
 
 struct MoveSet
 {
     Move moves[MAX_SNAKE_COUNT];
-    int move_count;
+    uint8_t move_count;
 };
 
 Move &get_moveset_move(MoveSet &moveset, int i) { return moveset.moves[i]; }
-int get_moveset_move_count(MoveSet &moveset) { return moveset.move_count; }
+uint8_t get_moveset_move_count(MoveSet &moveset) { return moveset.move_count; }
 
 void set_moveset_move(MoveSet &moveset, Move &move, int i) { moveset.moves[i] = move; }
-void set_moveset_move_count(MoveSet &moveset, int count) { moveset.move_count = count; }
+void set_moveset_move_count(MoveSet &moveset, uint8_t count) { moveset.move_count = count; }
 
 void print_moveset(MoveSet moveset)
 {
@@ -328,20 +335,20 @@ void print_moveset(MoveSet moveset)
 
 struct State
 {
-    int turn;
+    uint8_t turn;
     bool game_ended;
-    int player_losses[2];
-    int energy_count;
+    uint8_t player_losses[2];
+    uint8_t energy_count;
 
     CellType cells[MAX_CELL_COUNT]; // 0-7: snake_id, 8: CELL_EMPTY, 9: CELL_PLATFORM, 10: CELL_ENERGY
 
     Snake snakes[MAX_SNAKE_COUNT]; // 0-7: snakes
 
-    int player_alive_snake_count[2];
-    int player_alive_snake_ids[2][MAX_PLAYER_SNAKE_COUNT];
+    uint8_t player_alive_snake_count[2];
+    uint8_t player_alive_snake_ids[2][MAX_PLAYER_SNAKE_COUNT];
 
-    int alive_snake_count;
-    int alive_snake_ids[MAX_SNAKE_COUNT];
+    uint8_t alive_snake_count;
+    uint8_t alive_snake_ids[MAX_SNAKE_COUNT];
 
     float heuristic;
     float heuristic_depth_weight;
@@ -352,28 +359,28 @@ struct State
 
 constexpr size_t SIZE_OF_STATE = sizeof(State);
 
-int get_turn(State &state) { return state.turn; }
+uint8_t get_turn(State &state) { return state.turn; }
 bool is_game_ended(State &state) { return state.game_ended; }
-int get_player_losses(State &state, int player_id) { return state.player_losses[player_id]; }
-int get_energy_count(State &state) { return state.energy_count; }
+uint8_t get_player_losses(State &state, uint8_t player_id) { return state.player_losses[player_id]; }
+uint8_t get_energy_count(State &state) { return state.energy_count; }
 CellType get_cell(State &state, Pos pos) { return state.cells[pos]; }
-Snake &get_snake(State &state, int snake_id) { return state.snakes[snake_id]; }
-int get_player_alive_snake_count(State &state, int player_id) { return state.player_alive_snake_count[player_id]; }
-int get_player_alive_snake_id(State &state, int player_id, int index) { return state.player_alive_snake_ids[player_id][index]; }
-int get_alive_snake_count(State &state) { return state.alive_snake_count; }
-int get_alive_snake_id(State &state, int index) { return state.alive_snake_ids[index]; }
+Snake &get_snake(State &state, uint8_t snake_id) { return state.snakes[snake_id]; }
+uint8_t get_player_alive_snake_count(State &state, uint8_t player_id) { return state.player_alive_snake_count[player_id]; }
+uint8_t get_player_alive_snake_id(State &state, uint8_t player_id, int index) { return state.player_alive_snake_ids[player_id][index]; }
+uint8_t get_alive_snake_count(State &state) { return state.alive_snake_count; }
+uint8_t get_alive_snake_id(State &state, int index) { return state.alive_snake_ids[index]; }
 
 float get_heuristic(State &state) { return state.heuristic; }
 MoveSet &get_first_depth_moveset(State &state) { return state.first_depth_moveset; }
 
-void set_turn(State &state, int turn) { state.turn = turn; }
+void set_turn(State &state, uint8_t turn) { state.turn = turn; }
 void set_game_ended(State &state) { state.game_ended = true; }
-void set_player_losses(State &state, int player_id, int loss_count) { state.player_losses[player_id] = loss_count; }
-void add_player_loss(State &state, int player_id, int loss_count)
+void set_player_losses(State &state, uint8_t player_id, uint8_t loss_count) { state.player_losses[player_id] = loss_count; }
+void add_player_loss(State &state, uint8_t player_id, uint8_t loss_count)
 {
     state.player_losses[player_id] += loss_count;
 }
-void set_energy_count(State &state, int count) { state.energy_count = count; }
+void set_energy_count(State &state, uint8_t count) { state.energy_count = count; }
 void set_cell(State &state, Pos pos, CellType value) { state.cells[pos] = value; }
 
 void set_heuristic(State &state, float heuristic) { state.heuristic = heuristic; }
@@ -388,8 +395,8 @@ void initialize_cells(State &state)
 }
 void initialize_snake_data(
     State &state,
-    int snake_id,
-    int player_id)
+    uint8_t snake_id,
+    uint8_t player_id)
 {
     Snake &snake = get_snake(state, snake_id);
     initialize_snake_data(
@@ -402,12 +409,12 @@ void reset_alive_snake_count(State &state)
     state.player_alive_snake_count[0] = 0;
     state.player_alive_snake_count[1] = 0;
 }
-void add_player_alive_snake_id(State &state, int player_id, int snake_id)
+void add_player_alive_snake_id(State &state, uint8_t player_id, uint8_t snake_id)
 {
     state.alive_snake_ids[state.alive_snake_count++] = snake_id;
     state.player_alive_snake_ids[player_id][state.player_alive_snake_count[player_id]++] = snake_id;
 }
-void remove_snake_from_alive_snake_ids(State &state, int snake_id, int player_id)
+void remove_snake_from_alive_snake_ids(State &state, uint8_t snake_id, uint8_t player_id)
 {
     for (int i = 0; i < get_alive_snake_count(state); i++)
     {
@@ -416,7 +423,7 @@ void remove_snake_from_alive_snake_ids(State &state, int snake_id, int player_id
             if (i + 1 < get_alive_snake_count(state))
             {
                 // Remove the snake id from alive_snake_ids by shifting the rest of the array
-                memmove(&state.alive_snake_ids[i], &state.alive_snake_ids[i + 1], SIZE_OF_INT * (get_alive_snake_count(state) - i - 1));
+                memmove(&state.alive_snake_ids[i], &state.alive_snake_ids[i + 1], SIZE_OF_UINT8 * (get_alive_snake_count(state) - i - 1));
             }
             state.alive_snake_count--;
             break;
@@ -431,7 +438,7 @@ void remove_snake_from_alive_snake_ids(State &state, int snake_id, int player_id
             if (i + 1 < get_player_alive_snake_count(state, player_id))
             {
                 // Remove the snake id from alive_snake_ids by shifting the rest of the array
-                memmove(&state.player_alive_snake_ids[player_id][i], &state.player_alive_snake_ids[player_id][i + 1], SIZE_OF_INT * (get_player_alive_snake_count(state, player_id) - i - 1));
+                memmove(&state.player_alive_snake_ids[player_id][i], &state.player_alive_snake_ids[player_id][i + 1], SIZE_OF_UINT8 * (get_player_alive_snake_count(state, player_id) - i - 1));
             }
             state.player_alive_snake_count[player_id]--;
             return;
@@ -456,11 +463,11 @@ void revert_last_move(State &last_state, State &state)
     revert_last_move_count++;
 }
 
-int count_player_points(State &state, int player_id);
+int count_player_points(State &state, uint8_t player_id);
 
 /* --- TOOL FUNCTIONS --- */
 
-int get_opponent_id(const int player_id) { return 1 - player_id; }
+int get_opponent_id(const uint8_t player_id) { return 1 - player_id; }
 
 bool is_north_cell_out_of_bounds(const Pos pos) { return get_y(pos) == 0; }
 bool is_west_cell_out_of_bounds(const Pos pos) { return get_x(pos) == 0; }
@@ -611,7 +618,7 @@ void create_lookup_tables(State &state)
 
 /* --- GAME PHYSICS - GENERATION --- */
 
-bool is_cell_solid(CellType cell, int snake_id)
+bool is_cell_solid(CellType cell, uint8_t snake_id)
 {
     return cell != (CellType)snake_id && cell != CELL_EMPTY;
 }
@@ -648,12 +655,12 @@ int generate_snake_moves(State &state, Snake &snake, Pos moves[3])
 
 int generate_player_movesets_time = 0;
 int generate_player_movesets_count = 0;
-int generate_player_movesets(State &state, int player_id, MoveSet movesets[MAX_PLAYER_MOVE_SETS])
+int generate_player_movesets(State &state, uint8_t player_id, MoveSet movesets[MAX_PLAYER_MOVE_SETS])
 {
     auto start_chrono = chrono::high_resolution_clock::now();
 
-    int snake_count = get_player_alive_snake_count(state, player_id);
-    int snake_ids[snake_count];
+    uint8_t snake_count = get_player_alive_snake_count(state, player_id);
+    uint8_t snake_ids[snake_count];
 
     int snake_move_counts[snake_count];
     Pos snake_moves[snake_count][3];
@@ -661,7 +668,7 @@ int generate_player_movesets(State &state, int player_id, MoveSet movesets[MAX_P
     // Generate moves for all snakes
     for (int i = 0; i < snake_count; i++)
     {
-        int snake_id = get_player_alive_snake_id(state, player_id, i);
+        uint8_t snake_id = get_player_alive_snake_id(state, player_id, i);
         Snake &snake = get_snake(state, snake_id);
 
         snake_ids[i] = snake_id;
@@ -732,8 +739,8 @@ int generate_player_movesets(State &state, int player_id, MoveSet movesets[MAX_P
 MoveSet merge_movesets(MoveSet &moveset1, MoveSet &moveset2)
 {
     MoveSet merged_moveset;
-    int moveset1_move_count = get_moveset_move_count(moveset1);
-    int moveset2_move_count = get_moveset_move_count(moveset2);
+    uint8_t moveset1_move_count = get_moveset_move_count(moveset1);
+    uint8_t moveset2_move_count = get_moveset_move_count(moveset2);
 
     // TODO: Use memcpy ?
 
@@ -811,7 +818,7 @@ void remove_eaten_energies(State &state, Pos eaten_energies[MAX_SNAKE_COUNT], in
     }
 }
 
-bool is_snake_in_moveset(MoveSet &moveset, int snake_id)
+bool is_snake_in_moveset(MoveSet &moveset, uint8_t snake_id)
 {
     for (int i = 0; i < get_moveset_move_count(moveset); i++)
     {
@@ -830,7 +837,7 @@ int find_snake_collisions(State &state, Snake *colliding_snakes[MAX_SNAKE_COUNT]
 
     for (int snake_index = 0; snake_index < alive_count; snake_index++)
     {
-        int snake_id = get_alive_snake_id(state, snake_index);
+        uint8_t snake_id = get_alive_snake_id(state, snake_index);
         Snake &snake = get_snake(state, snake_id);
         Pos snake_head_pos = get_snake_head_pos(snake);
 
@@ -912,8 +919,8 @@ void kill_snake_immediately(State &state, Snake &snake)
 
 bool apply_snake_gravity(State &state, Snake &snake)
 {
-    int snake_id = get_snake_id(snake);
-    int snake_body_length = get_snake_body_length(snake);
+    uint8_t snake_id = get_snake_id(snake);
+    uint8_t snake_body_length = get_snake_body_length(snake);
 
     // Reconstruct body positions once, reuse for all checks
     Pos body_cache[MAX_SNAKE_SIZE];
@@ -994,7 +1001,7 @@ void apply_gravity(State &state)
     // Iter until 'alive snake count' consecutive gravity is useless
     while (gravity_finalized_count < get_alive_snake_count(state))
     {
-        int snake_id = get_alive_snake_id(state, snake_index);
+        uint8_t snake_id = get_alive_snake_id(state, snake_index);
         Snake &snake = get_snake(state, snake_id);
 
         bool gravity_applied = apply_snake_gravity(state, snake);
@@ -1049,13 +1056,13 @@ void apply_moveset(State &state, MoveSet &moveset)
 
 /* --- DECISION MAKING --- */
 
-int count_player_points(State &state, int player_id)
+int count_player_points(State &state, uint8_t player_id)
 {
     // Sum lengths of alive snakes for my player
     int points = 0;
     for (int i = 0; i < get_player_alive_snake_count(state, player_id); i++)
     {
-        int snake_id = get_player_alive_snake_id(state, player_id, i);
+        uint8_t snake_id = get_player_alive_snake_id(state, player_id, i);
         Snake &snake = get_snake(state, snake_id);
         points += get_snake_body_length(snake);
     }
@@ -1069,7 +1076,7 @@ int encode_lexicographic_priority(int a, int b, int b_max)
     return a * b_max + b;
 }
 
-int evaluate_end_states(State &state, int player_id, int player_points, int opponent_points)
+int evaluate_end_states(State &state, uint8_t player_id, int player_points, int opponent_points)
 {
     bool player_win = false;
     bool opponent_win = false;
@@ -1117,7 +1124,7 @@ int evaluate_end_states(State &state, int player_id, int player_points, int oppo
 
 int evaluate_state_time = 0;
 int evaluate_state_count = 0;
-float evaluate_state(State &state, int player_id)
+float evaluate_state(State &state, uint8_t player_id)
 {
     auto start_chrono = chrono::high_resolution_clock::now();
 
@@ -1141,7 +1148,7 @@ float evaluate_state(State &state, int player_id)
     float platform_bonuses = 0;
     for (int i = 0; i < get_player_alive_snake_count(state, player_id); i++)
     {
-        int snake_id = get_player_alive_snake_id(state, player_id, i);
+        uint8_t snake_id = get_player_alive_snake_id(state, player_id, i);
         Snake &snake = get_snake(state, snake_id);
         Pos snake_head_pos = get_snake_head_pos(snake);
 
@@ -1154,7 +1161,7 @@ float evaluate_state(State &state, int player_id)
         // Reconstruct body once for both loops below
         Pos body_cache[MAX_SNAKE_SIZE];
         reconstruct_body(snake, body_cache);
-        int snake_len = get_snake_body_length(snake);
+        uint8_t snake_len = get_snake_body_length(snake);
 
         for (int bi = 0; bi < snake_len; bi++)
         {
@@ -1206,7 +1213,7 @@ float evaluate_state(State &state, int player_id)
 
 int choose_best_player_moveset_time = 0;
 int choose_best_player_moveset_count = 0;
-MoveSet choose_best_player_moveset(State &state, int player_id, MoveSet &previous_player_moveset)
+MoveSet choose_best_player_moveset(State &state, uint8_t player_id, MoveSet &previous_player_moveset)
 {
     auto start_chrono = chrono::high_resolution_clock::now();
 
@@ -1240,10 +1247,10 @@ MoveSet choose_best_player_moveset(State &state, int player_id, MoveSet &previou
 
 void print_marks(State &state, MoveSet best_moveset)
 {
-    for (int i = 0; i < get_moveset_move_count(best_moveset); i++)
+    for (int i = 0; i < (int)get_moveset_move_count(best_moveset); i++)
     {
         Move &move = get_moveset_move(best_moveset, i);
-        int snake_id = get_move_snake_id(move);
+        uint8_t snake_id = get_move_snake_id(move);
         Snake &snake = get_snake(state, snake_id);
 
         BFSDistanceToEnergy closest_energy = lookup_initial_bfs_distance_to_closest_energy(state, get_snake_head_pos(snake));
@@ -1335,7 +1342,7 @@ void consider_state_to_be_candidate(State &state, MoveSet &last_moveset, priorit
 
 int find_candidates_among_state_children_time = 0;
 int find_candidates_among_state_children_count = 0;
-void find_candidates_among_state_children(State &state, int player_id, std::priority_queue<State, std::vector<State>, CompareState> &beam_search_candidates, int beam_width)
+void find_candidates_among_state_children(State &state, uint8_t player_id, std::priority_queue<State, std::vector<State>, CompareState> &beam_search_candidates, int beam_width)
 {
     auto start_chrono = chrono::high_resolution_clock::now();
 
@@ -1386,7 +1393,7 @@ const State &get_best_candidate(std::priority_queue<State, std::vector<State>, C
     return beam_search_candidates.top();
 }
 
-MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam_width, int maximum_microseconds, auto start_turn_chrono)
+MoveSet beam_search(State &initial_state, uint8_t player_id, int depth_max, int beam_width, int maximum_microseconds, auto start_turn_chrono)
 {
     fprintf(stderr, "Starting beam_search: player_id=%d, depth_max=%d, beam_width=%d, max_time_us=%d\n", player_id, depth_max, beam_width, maximum_microseconds);
     beam_search_visited_states_count = 0;
@@ -1456,8 +1463,11 @@ MoveSet beam_search(State &initial_state, int player_id, int depth_max, int beam
 
 void parse_initial_inputs(State &state)
 {
-    cin >> map_properties.my_id;
-    map_properties.opp_id = get_opponent_id(map_properties.my_id);
+    int my_id;
+    cin >> my_id;
+
+    map_properties.my_id = my_id;
+    map_properties.opp_id = get_opponent_id(my_id);
 
     cin >> map_properties.width;
     cin >> map_properties.height;
@@ -1515,7 +1525,7 @@ bool parse_pos_from_segment(string segment, Pos &pos)
     return true;
 }
 
-void parse_snakebot(State &state, Snake &snake, int snakebotId, string bodyStr)
+void parse_snakebot(State &state, Snake &snake, uint8_t snakebotId, string bodyStr)
 {
     reset_snake_length(snake);
 
@@ -1550,10 +1560,8 @@ void parse_snakebot(State &state, Snake &snake, int snakebotId, string bodyStr)
 
 void parse_turn_inputs(State &state)
 {
-    int energy_count;
-    cin >> energy_count;
-    initial_energy_count = energy_count;
-    for (int i = 0; i < energy_count; i++)
+    cin >> initial_energy_count;
+    for (int i = 0; i < initial_energy_count; i++)
     {
         int x, y;
         cin >> x >> y;
@@ -1564,7 +1572,7 @@ void parse_turn_inputs(State &state)
         initial_energies[i] = pos;
         set_cell(state, pos, CELL_ENERGY);
     }
-    set_energy_count(state, energy_count);
+    set_energy_count(state, initial_energy_count);
 
     reset_alive_snake_count(state);
 
@@ -1576,11 +1584,11 @@ void parse_turn_inputs(State &state)
         string bodyStr;
         cin >> snakebotId >> bodyStr;
 
-        Snake &snake = get_snake(state, snakebotId);
-        int player_id = get_snake_player_id(snake);
-        add_player_alive_snake_id(state, player_id, snakebotId);
+        Snake &snake = get_snake(state, (uint8_t)snakebotId);
+        uint8_t player_id = get_snake_player_id(snake);
+        add_player_alive_snake_id(state, player_id, (uint8_t)snakebotId);
 
-        parse_snakebot(state, snake, snakebotId, bodyStr);
+        parse_snakebot(state, snake, (uint8_t)snakebotId, bodyStr);
     }
 }
 
@@ -1661,6 +1669,7 @@ int main()
         beam_search_average_states_visited = beam_search_sum_states_visited / (float)beam_search_execution_count;
 
         fprintf(stderr, "\nMax depth reached: %d\n", beam_search_depth);
+        // print_marks(state, best_moveset);
 
         fprintf(stderr, "\nStates visited this turn: %d\n", beam_search_visited_states_count);
         fprintf(stderr, "Avg visited states: %d\n", (int)beam_search_average_states_visited);
@@ -1709,14 +1718,13 @@ int main()
         // fprintf(stderr, "find_candidates_among_state_children() - count : %d\n", find_candidates_among_state_children_count);
         // fprintf(stderr, "find_candidates_among_state_children() - t/call: %f ys\n", find_candidates_among_state_children_time / (float)find_candidates_among_state_children_count);
 
-        print_marks(state, best_moveset);
 
-        for (int i = 0; i < get_moveset_move_count(best_moveset); i++)
+        for (int i = 0; i < (int)get_moveset_move_count(best_moveset); i++)
         {
             Move &move = get_moveset_move(best_moveset, i);
             Pos dir = get_move_dst_pos(move);
 
-            int snake_id = get_move_snake_id(move);
+            uint8_t snake_id = get_move_snake_id(move);
             Snake &snake = get_snake(state, snake_id);
             Pos snake_head = get_snake_head_pos(snake);
 
@@ -1725,13 +1733,13 @@ int main()
             // fprintf(stderr, "Chosen move for snake %d: %d %d\n", get_move_snake_id(move), get_map_x(get_move_dst_pos(move)), get_map_y(get_move_dst_pos(move)));
 
             if (dir_offset == NORTH_POS_OFFSET)
-                cout << snake_id << " UP";
+                cout << (int)snake_id << " UP";
             else if (dir_offset == SOUTH_POS_OFFSET)
-                cout << snake_id << " DOWN";
+                cout << (int)snake_id << " DOWN";
             else if (dir_offset == WEST_POS_OFFSET)
-                cout << snake_id << " LEFT";
+                cout << (int)snake_id << " LEFT";
             else
-                cout << snake_id << " RIGHT";
+                cout << (int)snake_id << " RIGHT";
 
             if (i != get_player_alive_snake_count(state, map_properties.my_id) - 1)
                 cout << ";";
