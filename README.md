@@ -64,11 +64,7 @@ sh create_arena.sh
 ## TODO
 
 - Version finale :
-    - Lever les fonctions inutiles
-    - Lever le try catch
-    - Lever les exit(0)
     - Lever les logging
-    - Lever les compteurs
     - hyper paramètre au début
     - Finetuning BS width
     - Alléger la data structure de State avec des int8 par exemple
@@ -76,14 +72,14 @@ sh create_arena.sh
         - Faire attention lorsqu'un snake n'a aucun move :
             - Recroqueville sur lui même
             - Bord de map bloqué par un autre
+    - Lever les compteurs
 
     1. Bitboard pour les cells (gain ~800 bytes) ?
 
 
-- remove useless things
-- Move ocnstexpr at the beginning as v8 versions
-
 Tester d'autres heuristic :
+
+- Pour chaque snake faire un malus quand il stagne, en sebasant sur les n dernières positions. Idée: Encourage à chercher ailleurs. Probleme : ca va juste alterner
 
 - AMELIORATION: Pour chaque support : Trouver le plus proche qui permet au snake de longueur X dy arriver. Récursivement ? Chaque support serait une node dans un graph de déplacements. Les support espacé d'une distance inférieur à la taille du snake sont connecté dans le graph.
 

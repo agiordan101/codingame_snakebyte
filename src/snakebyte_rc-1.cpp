@@ -1713,45 +1713,11 @@ int main()
             create_lookup_tables(state);
 
         MoveSet best_moveset;
-        try
-        {
-            best_moveset = beam_search(state, map_properties.my_id, BS_MAX_DEPTH, BS_WIDTH, BS_MAX_TIME, start_turn_chrono);
+        best_moveset = beam_search(state, map_properties.my_id, BS_MAX_DEPTH, BS_WIDTH, BS_MAX_TIME, start_turn_chrono);
 
-            beam_search_execution_count++;
-            beam_search_sum_states_visited += beam_search_visited_states_count;
-            beam_search_average_states_visited = beam_search_sum_states_visited / (float)beam_search_execution_count;
-        }
-        catch (const std::exception &e)
-        {
-            fprintf(stderr, "\n========== EXCEPTION IN BEAM_SEARCH ==========\n");
-            fprintf(stderr, "Exception Type: std::exception\n");
-            fprintf(stderr, "Exception Message: %s\n", e.what());
-            fprintf(stderr, "\n--- PLAYER INFO ---\n");
-            fprintf(stderr, "My ID: %d\n", map_properties.my_id);
-            fprintf(stderr, "Opponent ID: %d\n", map_properties.opp_id);
-            fprintf(stderr, "My Alive Snakes: %d\n", get_player_alive_snake_count(state, map_properties.my_id));
-            fprintf(stderr, "Opponent Alive Snakes: %d\n", get_player_alive_snake_count(state, map_properties.opp_id));
-            fprintf(stderr, "Total Alive Snakes: %d\n", get_alive_snake_count(state));
-            fprintf(stderr, "===========================================\n\n");
-            exit(1);
-        }
-        catch (...)
-        {
-            fprintf(stderr, "\n========== UNKNOWN EXCEPTION IN BEAM_SEARCH ==========\n");
-            fprintf(stderr, "Exception Type: Unknown (not std::exception)\n");
-            fprintf(stderr, "\n--- PLAYER INFO ---\n");
-            fprintf(stderr, "My ID: %d\n", map_properties.my_id);
-            fprintf(stderr, "Opponent ID: %d\n", map_properties.opp_id);
-            fprintf(stderr, "My Alive Snakes: %d\n", get_player_alive_snake_count(state, map_properties.my_id));
-            fprintf(stderr, "Opponent Alive Snakes: %d\n", get_player_alive_snake_count(state, map_properties.opp_id));
-            fprintf(stderr, "Total Alive Snakes: %d\n", get_alive_snake_count(state));
-            fprintf(stderr, "\n--- BEAM SEARCH STATS ---\n");
-            fprintf(stderr, "Visited States: %d\n", beam_search_visited_states_count);
-            fprintf(stderr, "Beam Search Depth Reached: %d\n", beam_search_depth);
-            fprintf(stderr, "========================================================\n\n");
-            exit(1);
-        }
-        // print_moveset(best_moveset);
+        beam_search_execution_count++;
+        beam_search_sum_states_visited += beam_search_visited_states_count;
+        beam_search_average_states_visited = beam_search_sum_states_visited / (float)beam_search_execution_count;
 
         fprintf(stderr, "\nMax depth reached: %d\n", beam_search_depth);
 
