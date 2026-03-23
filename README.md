@@ -69,26 +69,16 @@ sh create_arena.sh
     - Lever les exit(0)
     - Lever les fonctions inutiles
     - Lever le try catch
-
-- Alléger la data structure de State avec des int8 par exemple
+    - hyper paramètre au début
+    - Finetuning BS width
+    - Alléger la data structure de State avec des int8 par exemple
+    - Retest de générer les moves d'inertie quand il n'y en as pas de valide
+        - Faire attention lorsqu'un snake n'a aucun move :
+            - Recroqueville sur lui même
+            - Bord de map bloqué par un autre
 
     1. Bitboard pour les cells (gain ~800 bytes) ?
 
-    2. Nibble packing des cells (gain ~833 bytes, plus simple)
-
-        Si les bitboards sont trop complexes, 4 bits par cellule suffisent (11 valeurs < 16) :
-
-        uint8_t cells[MAX_CELL_COUNT / 2 + 1]; // 834 bytes au lieu de 1666
-        // cell[i] = (cells[i/2] >> ((i%1)*4)) & 0xF
-
-- Find why opponent is taking so long
-    - Log time merge_movesets
-    - Improve merge_movesets
-
-- Comment c'est possible de générer un move OOB !! 
-- Faire attention lorsqu'un snake n'a aucun move :
-    - Recroqueville sur lui même
-    - Bord de map bloqué par un autre
 
 - remove useless things
 - Move ocnstexpr at the beginning as v8 versions
@@ -181,13 +171,21 @@ MoveSet -> A list of Move
 
 ## History
 
+# v5.11
+
+Don't generate move on platforms & Fix platform bonuses (was not working)
+
+League: Legend (max)
+First publication : 48/2300
+Last publication: -
+
 # v5.10
 
 Don't generate move on platforms & Fix platform bonuses (was not working)
 
 League: Legend (max)
 First publication : 30/2277
-Last publication: -
+Last publication: 43/2300
 
 # v5.9
 

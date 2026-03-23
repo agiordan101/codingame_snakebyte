@@ -1,4 +1,4 @@
-// Version 5.11
+// Version 5.10.1
 
 // Algorithms :
 //  v1 - Each snakes go to closest Energy cell using BFS
@@ -55,7 +55,6 @@
 //      v5.10 - Remove energies pos from State : 2972 -> 2772 bytes
 //              & fix gravity signals
 //              & fix collisions when one player only moved
-//      v5.11 - encode_lexicographic_priority(head_to_energy_dist, body_support_to_closest_energy_dist
 //  v6 - Rework beam search state data structures : with 2 priority queues and 2 buffers alternating as beam states and beam candidates (Very bad due to cache misses)
 //  v7 - Rework beam search state data structures : Use 2 static state arrays and nth_element instead of vector and priority_queue
 //      v7.1 - Don't generate move on platforms
@@ -602,19 +601,16 @@ BFSDistanceToEnergy cells_to_energy_lookup_table[MAX_CELL_COUNT][MAX_ENERGY_COUN
 Pos initial_energies[MAX_ENERGY_COUNT];
 int initial_energy_count = 0;
 
-int lookup_initial_bfs_distance_to_closest_energy(State &state, Pos from_pos, Pos &out_energy_pos)
+int lookup_initial_bfs_distance_to_closest_energy(State &state, Pos snake_head_pos)
 {
     // Iterate from the closest to the farthest energy
     for (int e = 0; e < MAX_ENERGY_COUNT; e++)
     {
-        BFSDistanceToEnergy bfsdistance = cells_to_energy_lookup_table[from_pos][e];
+        BFSDistanceToEnergy bfsdistance = cells_to_energy_lookup_table[snake_head_pos][e];
 
         // Verify that the energy still exists
         if (get_cell(state, bfsdistance.energy_pos) == CELL_ENERGY)
-        {
-            out_energy_pos = bfsdistance.energy_pos;
             return bfsdistance.distance;
-        }
     }
 
     return -1;
@@ -1481,56 +1477,23 @@ float evaluate_state(State &state, int player_id)
         Snake &snake = get_snake(state, snake_id);
         Pos snake_head_pos = get_snake_head_pos(snake);
 
-        Pos closest_energy_pos;
-        int head_to_energy_dist;
-        head_to_energy_dist = lookup_initial_bfs_distance_to_closest_energy(state, snake_head_pos, closest_energy_pos);
+        // TODO: Add maluses/bonuses about surviving
+
+        Pos closest;
+        int dist;
+        dist = lookup_initial_bfs_distance_to_closest_energy(state, snake_head_pos);
+        // dist = find_closest_energy_cell_manhattan(state, snake_head_pos, closest);
+        // dist = find_closest_energy_cell_bfs(state, snake_head_pos, closest);
+        // dist = find_closest_energy_cell_bfs_iterative(state, snake_head_pos, closest);
+        if (dist == -1)
+            dist_sum += MAX_MAP_WIDTH + MAX_MAP_HEIGHT; // If no energy cell found, consider it very far
+        else
+            dist_sum += dist;
 
         // Reconstruct body once for both loops below
         Pos body_cache[MAX_SNAKE_SIZE];
         reconstruct_body(snake, body_cache);
         int snake_len = get_snake_body_length(snake);
-
-        int body_support_to_closest_energy_dist;
-        int score = 0;
-        for (int bi = 0; bi < snake_len; bi++)
-        {
-            Pos snake_body_pos = body_cache[bi];
-
-            if (is_south_cell_out_of_bounds(snake_body_pos))
-                continue;
-
-            Pos cell_under = get_south_pos(snake_body_pos);
-            CellType cell_under_type = get_cell(state, cell_under);
-            if (cell_under_type == CELL_EMPTY || cell_under_type == snake_id)
-                continue;
-
-            // Add bonuses depending on the first body index on a platform. The closer to the head, the more bonus.
-            // The idea is that reaching a platform to navigate could be interesting even if we move away from the energy
-            // Snake bonus in ]0, 1.5]
-            // So: head on platform = -1.5 dist
-            // Should be >1 to encourage sidesteps over staying at the same position due tu gravity
-            // Should be <2 to discourage sidesteps over going directly onto the energy
-            platform_bonuses += 1.5 * (snake_len - bi) / (float)snake_len;
-
-            // This body cell is on a solid support point - find closest existing energy from this cell
-            body_support_to_closest_energy_dist = lookup_initial_bfs_distance_to_closest_energy(state, snake_body_pos, closest_energy_pos);
-            if (body_support_to_closest_energy_dist == -1)
-                continue;
-
-            score = encode_lexicographic_priority(head_to_energy_dist, body_support_to_closest_energy_dist, 6);
-            // if (head_to_energy_dist <= snake_len - bi)
-            // {
-            // }
-            // else
-            //     score = encode_lexicographic_priority(body_support_to_closest_energy_dist, head_to_energy_dist, 10);
-
-            break;
-        }
-
-        if (head_to_energy_dist == -1)
-            dist_sum += (MAX_WIDTH + MAX_HEIGHT) * 6; // If no energy cell found, consider it very far
-        else
-            dist_sum += score;
 
         for (int bi = 0; bi < snake_len; bi++)
         {
@@ -1545,20 +1508,105 @@ float evaluate_state(State &state, int player_id)
                 dist_sum += 1;
             }
         }
+
+        // Add bonuses depending on the first body index on a platform. The closer to the head, the more bonus.
+        // The idea is that reaching a platform to navigate could be interesting even if we move away from the energy
+        for (int bi = 0; bi < snake_len; bi++)
+        {
+            Pos snake_body_pos = body_cache[bi];
+            if (is_south_cell_out_of_bounds(snake_body_pos))
+                continue;
+
+            Pos cell_under = get_south_pos(snake_body_pos);
+            if (get_cell(state, cell_under) == CELL_PLATFORM)
+            {
+                // Snake bonus in ]0, 1.5]
+                // So: head on platform = -1.5 dist
+                // Should be >1 to encourage sidesteps over staying at the same position due tu gravity
+                // Should be <2 to discourage sidesteps over going directly onto the energy
+                platform_bonuses += 1.5 * (snake_len - bi) / (float)snake_len;
+                break;
+            }
+        }
     }
 
     dist_sum -= platform_bonuses;
 
     // Multiply dist so distance=1 doesn't be equivalent to a game point
-    float dist_score = 1.0f / max(1.0f, dist_sum);
-    // float dist_score = dist_sum != 0 ? 1.0 / dist_sum : 0.0;
+    float dist_score = dist_sum != 0 ? 1.0 / (2 * dist_sum) : 0.0;
+
+    float opp_dist_sum = 0;
+    float opp_platform_bonuses = 0;
+    for (int i = 0; i < get_player_alive_snake_count(state, get_opponent_id(player_id)); i++)
+    {
+        int snake_id = get_player_alive_snake_id(state, get_opponent_id(player_id), i);
+        Snake &snake = get_snake(state, snake_id);
+        Pos snake_head_pos = get_snake_head_pos(snake);
+
+        // TODO: Add maluses/bonuses about surviving
+
+        Pos closest;
+        int dist;
+        dist = lookup_initial_bfs_distance_to_closest_energy(state, snake_head_pos);
+        // dist = find_closest_energy_cell_manhattan(state, snake_head_pos, closest);
+        // dist = find_closest_energy_cell_bfs(state, snake_head_pos, closest);
+        // dist = find_closest_energy_cell_bfs_iterative(state, snake_head_pos, closest);
+        if (dist == -1)
+            opp_dist_sum += MAX_MAP_WIDTH + MAX_MAP_HEIGHT; // If no energy cell found, consider it very far
+        else
+            opp_dist_sum += dist;
+
+        // Reconstruct body once for both loops below
+        Pos body_cache[MAX_SNAKE_SIZE];
+        reconstruct_body(snake, body_cache);
+        int snake_len = get_snake_body_length(snake);
+
+        for (int bi = 0; bi < snake_len; bi++)
+        {
+            Pos snake_body_pos = body_cache[bi];
+
+            // Add maluses for being out of map
+            if (get_x(snake_body_pos) < MAP_PADDING ||
+                get_x(snake_body_pos) >= MAX_WIDTH - MAP_PADDING ||
+                get_y(snake_body_pos) < MAP_PADDING ||
+                get_y(snake_body_pos) >= MAX_HEIGHT - MAP_PADDING)
+            {
+                opp_dist_sum += 1;
+            }
+        }
+
+        // Add bonuses depending on the first body index on a platform. The closer to the head, the more bonus.
+        // The idea is that reaching a platform to navigate could be interesting even if we move away from the energy
+        for (int bi = 0; bi < snake_len; bi++)
+        {
+            Pos snake_body_pos = body_cache[bi];
+            if (is_south_cell_out_of_bounds(snake_body_pos))
+                continue;
+
+            Pos cell_under = get_south_pos(snake_body_pos);
+            if (get_cell(state, cell_under) == CELL_PLATFORM)
+            {
+                // Snake bonus in ]0, 1.5]
+                // So: head on platform = -1.5 dist
+                // Should be >1 to encourage sidesteps over staying at the same position due tu gravity
+                // Should be <2 to discourage sidesteps over going directly onto the energy
+                opp_platform_bonuses += 1.5 * (snake_len - bi) / (float)snake_len;
+                break;
+            }
+        }
+    }
+
+    opp_dist_sum -= opp_platform_bonuses;
+
+    // Multiply dist so distance=1 doesn't be equivalent to a game point
+    float opp_dist_score = opp_dist_sum != 0 ? 1.0 / (2 * opp_dist_sum) : 0.0;
 
     auto end_chrono = chrono::high_resolution_clock::now();
     evaluate_state_time += chrono::duration_cast<chrono::microseconds>(end_chrono - start_chrono).count();
     evaluate_state_count++;
 
     // Game points is positive if it's good for the player, negative if it's good for its opponent, so we invert it for opponent evaluation
-    return player_points - opponent_points + dist_score;
+    return player_points - opponent_points + dist_score - opp_dist_score;
 }
 
 int choose_best_player_moveset_time = 0;
