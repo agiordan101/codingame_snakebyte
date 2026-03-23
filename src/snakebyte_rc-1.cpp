@@ -294,16 +294,6 @@ void initialize_snake_data(
     snake.body_length = 3;
 }
 
-void print_snake(Snake &snake)
-{
-    fprintf(stderr, "Snake %d (p=%d) of length %d:\n", snake.id, snake.player_id, snake.body_length);
-    for (int i = 0; i < snake.body_length; i++)
-    {
-        Pos body_pos = get_snake_body_pos(snake, i);
-        fprintf(stderr, "  %d: (%d, %d)\n", i, get_map_x(body_pos), get_map_y(body_pos));
-    }
-}
-
 /* --- ACTION / MOVE --- */
 
 struct Move
@@ -498,37 +488,6 @@ Pos get_west_pos(const Pos pos) { return pos + WEST_POS_OFFSET; }
 Pos get_east_pos(const Pos pos) { return pos + EAST_POS_OFFSET; }
 Pos get_south_pos(const Pos pos) { return pos + SOUTH_POS_OFFSET; }
 
-int find_closest_energy_cell_bfs(State &state, Pos start_pos, Pos &closest_energy_cell_pos);
-void print_cells(State &state, string title = "")
-{
-    if (title != "")
-        fprintf(stderr, "(dPoint=%d) %s\n", count_player_points(state, map_properties.my_id) - count_player_points(state, map_properties.opp_id), title.c_str());
-
-    for (int y = 0; y < MAX_HEIGHT; y++)
-    {
-        for (int x = 0; x < MAX_WIDTH; x++)
-        {
-            // Print emojis
-            Pos pos = get_pos(x, y);
-            CellType cell = get_cell(state, pos);
-            if (cell == CELL_EMPTY)
-                fprintf(stderr, "⬜");
-            else if (cell == CELL_PLATFORM)
-                fprintf(stderr, "🟦");
-            else if (cell == CELL_ENERGY)
-                fprintf(stderr, "🟨");
-            else
-            {
-                Snake &snake = get_snake(state, (int)cell);
-                if (get_snake_player_id(snake) == map_properties.my_id)
-                    fprintf(stderr, "🐍");
-                else
-                    fprintf(stderr, "🐉");
-            }
-        }
-        fprintf(stderr, "\n");
-    }
-}
 void print_map(State &state, string title = "")
 {
     if (title != "")
@@ -559,32 +518,6 @@ void print_map(State &state, string title = "")
         fprintf(stderr, "\n");
     }
 }
-void print_map_bfs_distances(State &state)
-{
-    Pos closest = -1;
-
-    for (int y = 0; y < map_properties.height; y++)
-    {
-        for (int x = 0; x < map_properties.width; x++)
-        {
-            // Print emojis
-            Pos pos = get_pos_from_map_coord(x, y);
-            CellType cell = get_cell(state, pos);
-            if (cell == CELL_EMPTY)
-            {
-                int dist = find_closest_energy_cell_bfs(state, pos, closest);
-                fprintf(stderr, "%d ", dist);
-            }
-            else if (cell == CELL_PLATFORM)
-                fprintf(stderr, "# ");
-            else if (cell == CELL_ENERGY)
-                fprintf(stderr, "o ");
-            else
-                fprintf(stderr, "S ");
-        }
-        fprintf(stderr, "\n");
-    }
-}
 
 /* --- FIRST TURN COMPUTING --- */
 
@@ -601,7 +534,7 @@ BFSDistanceToEnergy cells_to_energy_lookup_table[MAX_CELL_COUNT][MAX_ENERGY_COUN
 Pos initial_energies[MAX_ENERGY_COUNT];
 int initial_energy_count = 0;
 
-int lookup_initial_bfs_distance_to_closest_energy(State &state, Pos snake_head_pos)
+BFSDistanceToEnergy lookup_initial_bfs_distance_to_closest_energy(State &state, Pos snake_head_pos)
 {
     // Iterate from the closest to the farthest energy
     for (int e = 0; e < MAX_ENERGY_COUNT; e++)
@@ -610,10 +543,10 @@ int lookup_initial_bfs_distance_to_closest_energy(State &state, Pos snake_head_p
 
         // Verify that the energy still exists
         if (get_cell(state, bfsdistance.energy_pos) == CELL_ENERGY)
-            return bfsdistance.distance;
+            return bfsdistance;
     }
 
-    return -1;
+    return (BFSDistanceToEnergy){-1, -1};
 }
 
 void create_bfs_cells_to_energy_distance_lookup_table(State &state)
@@ -674,72 +607,6 @@ void create_bfs_cells_to_energy_distance_lookup_table(State &state)
             {
                 return a.distance < b.distance;
             });
-    }
-}
-
-void print_bfs_distances_per_energy(State &state)
-{
-    for (int ei = 0; ei < initial_energy_count; ei++)
-    {
-        Pos energy_pos = initial_energies[ei];
-        fprintf(stderr, "\n--- BFS Distances for Energy at (%d, %d) ---\n", get_map_x(energy_pos), get_map_y(energy_pos));
-
-        for (int y = 0; y < map_properties.height; y++)
-        {
-            for (int x = 0; x < map_properties.width; x++)
-            {
-                Pos pos = get_pos_from_map_coord(x, y);
-                CellType cell = get_cell(state, pos);
-
-                if (cell == CELL_PLATFORM)
-                    fprintf(stderr, "#  "); // Platform
-                else
-                {
-                    // Find distance from the cell to the current energy
-                    bool displayed = false;
-                    for (int e = 0; e < initial_energy_count; e++)
-                    {
-                        if (cells_to_energy_lookup_table[pos][e].energy_pos == energy_pos)
-                        {
-                            displayed = true;
-                            int dist = cells_to_energy_lookup_table[pos][e].distance;
-                            fprintf(stderr, "%2d ", dist); // Distance
-                            break;
-                        }
-                    }
-                    if (!displayed)
-                    {
-                        fprintf(stderr, "Energy (%d, %d) not found for cell (%d, %d)\n", get_map_x(energy_pos), get_map_y(energy_pos), get_map_x(pos), get_map_y(pos)); // Unreachable cell
-                        exit(0);
-                    }
-                }
-            }
-            fprintf(stderr, "\n");
-        }
-    }
-}
-
-void print_map_of_closest_energy_distances(State &state)
-{
-    fprintf(stderr, "Map of closest energy distances:\n");
-
-    for (int y = 0; y < map_properties.height; y++)
-    {
-        for (int x = 0; x < map_properties.width; x++)
-        {
-            Pos pos = get_pos_from_map_coord(x, y);
-            CellType cell = get_cell(state, pos);
-
-            if (cell == CELL_PLATFORM)
-                fprintf(stderr, "#  "); // Platform
-            else
-            {
-                // Distance to closest energy
-                int dist = cells_to_energy_lookup_table[pos][0].distance;
-                fprintf(stderr, "%2d ", dist);
-            }
-        }
-        fprintf(stderr, "\n");
     }
 }
 
@@ -1207,169 +1074,6 @@ void apply_moveset(State &state, MoveSet &moveset)
     apply_moveset_count++;
 }
 
-/* --- ENERGY DISTANCE - BFS --- */
-
-int find_closest_energy_cell_recursive(State &state, queue<pair<Pos, int>> &bfs_queue, bool visited[], Pos &closest_energy_cell_pos)
-{
-    if (bfs_queue.empty())
-    {
-        return -1; // No energy cell found
-    }
-
-    pair<Pos, int> front = bfs_queue.front();
-    Pos current_pos = front.first;
-    int distance = front.second;
-    bfs_queue.pop();
-
-    // Explore neighbors in order: North, West, East, South
-    Pos neighbors[4] = {
-        get_north_pos(current_pos),
-        get_west_pos(current_pos),
-        get_east_pos(current_pos),
-        get_south_pos(current_pos)};
-
-    bool neighbor_out_of_bounds[4] = {
-        is_north_cell_out_of_bounds(current_pos),
-        is_west_cell_out_of_bounds(current_pos),
-        is_east_cell_out_of_bounds(current_pos),
-        is_south_cell_out_of_bounds(current_pos)};
-
-    for (int i = 0; i < 4; i++)
-    {
-        // New valid cell if : In map & Not visited yet & Empty
-        if (!neighbor_out_of_bounds[i] && !visited[neighbors[i]])
-        {
-            CellType neighbor = get_cell(state, neighbors[i]);
-
-            // Check if the position is an energy cell
-            if (neighbor == CELL_ENERGY)
-            {
-                closest_energy_cell_pos = neighbors[i];
-                return distance + 1;
-            }
-
-            visited[neighbors[i]] = true;
-
-            if (neighbor == CELL_EMPTY)
-                bfs_queue.push(make_pair(neighbors[i], distance + 1));
-            // fprintf(stderr, "BFS: Push (%d, %d) with distance %d\n", get_x(neighbors[i]), get_y(neighbors[i]), distance + 1);
-        }
-    }
-
-    // Recursively process the rest of the queue
-    return find_closest_energy_cell_recursive(state, bfs_queue, visited, closest_energy_cell_pos);
-}
-
-int bfs_recursive_time = 0;
-int bfs_recursive_count = 0;
-int find_closest_energy_cell_bfs(State &state, Pos start_pos, Pos &closest_energy_cell_pos)
-{
-    auto start_chrono = chrono::high_resolution_clock::now();
-
-    // Check if the starting position is an energy cell
-    // useless
-    if (get_cell(state, start_pos) == CELL_ENERGY)
-    {
-        closest_energy_cell_pos = start_pos;
-        return 0;
-    }
-
-    bool visited[MAX_CELL_COUNT] = {false};
-    queue<pair<Pos, int>> bfs_queue;
-    visited[start_pos] = true;
-    bfs_queue.push(make_pair(start_pos, 0));
-
-    int ret = find_closest_energy_cell_recursive(state, bfs_queue, visited, closest_energy_cell_pos);
-
-    auto end_chrono = chrono::high_resolution_clock::now();
-    bfs_recursive_time += chrono::duration_cast<chrono::microseconds>(end_chrono - start_chrono).count();
-    bfs_recursive_count++;
-    return ret;
-}
-
-int bfs_iterative_time = 0;
-int bfs_iterative_count = 0;
-int find_closest_energy_cell_bfs_iterative(State &state, Pos start_pos, Pos &closest_energy_cell_pos)
-{
-    auto start_chrono = chrono::high_resolution_clock::now();
-
-    // Initialize BFS
-    bool visited[MAX_CELL_COUNT] = {false};
-    visited[start_pos] = true;
-
-    queue<pair<Pos, int>> bfs_queue;
-    bfs_queue.push({start_pos, 0});
-
-    // BFS loop
-    while (!bfs_queue.empty())
-    {
-        auto [pos, dist] = bfs_queue.front();
-        bfs_queue.pop();
-
-        // Check all 4 neighbors
-        Pos neighbors[4] = {
-            get_north_pos(pos), get_west_pos(pos),
-            get_east_pos(pos), get_south_pos(pos)};
-        bool oob[4] = {
-            is_north_cell_out_of_bounds(pos), is_west_cell_out_of_bounds(pos),
-            is_east_cell_out_of_bounds(pos), is_south_cell_out_of_bounds(pos)};
-
-        for (int i = 0; i < 4; i++)
-        {
-            // Dot not go out of bounds or visit already visited cells
-            if (oob[i] || visited[neighbors[i]])
-                continue;
-
-            // Closest energy cell found !
-            if (get_cell(state, neighbors[i]) == CELL_ENERGY)
-            {
-                closest_energy_cell_pos = neighbors[i];
-                auto end_chrono = chrono::high_resolution_clock::now();
-                bfs_iterative_time += chrono::duration_cast<chrono::microseconds>(end_chrono - start_chrono).count();
-                bfs_iterative_count++;
-                return dist + 1;
-            }
-
-            // New cell found, add it to the queue if we can move on it
-            visited[neighbors[i]] = true;
-            if (get_cell(state, neighbors[i]) == CELL_EMPTY)
-            {
-                bfs_queue.push({neighbors[i], dist + 1});
-            }
-        }
-    }
-
-    auto end_chrono = chrono::high_resolution_clock::now();
-    bfs_iterative_time += chrono::duration_cast<chrono::microseconds>(end_chrono - start_chrono).count();
-    bfs_iterative_count++;
-    return -1; // No energy cell found
-}
-
-/* --- ENERGY DISTANCE - MANHATTAN--- */
-
-int find_closest_energy_cell_manhattan(State &state, Pos start_pos, Pos &closest_energy_cell_pos)
-{
-    int closest_distance = -1;
-
-    for (int y = 0; y < map_properties.height; y++)
-    {
-        for (int x = 0; x < map_properties.width; x++)
-        {
-            Pos pos = get_pos_from_map_coord(x, y);
-            if (get_cell(state, pos) != CELL_ENERGY)
-                continue;
-            int distance = abs(get_x(pos) - get_x(start_pos)) + abs(get_y(pos) - get_y(start_pos));
-            if (closest_distance == -1 || distance < closest_distance)
-            {
-                closest_distance = distance;
-                closest_energy_cell_pos = pos;
-            }
-        }
-    }
-
-    return closest_distance;
-}
-
 /* --- DECISION MAKING --- */
 
 int count_player_points(State &state, int player_id)
@@ -1391,15 +1095,6 @@ int encode_lexicographic_priority(int a, int b, int b_max)
     // Multiply A by maximum B value to prioritize A changes over any B changes
     return a * b_max + b;
 }
-
-// int encode_lexicographic_priority(int a, int b, int b_max, int c, int c_max)
-// {
-//     b = encode_lexicographic_priority(b, c, c_max);
-//     b_max = b_max * c_max;
-
-//     // Multiply A by maximum BC value to prioritize A changes over any BC changes
-//     return encode_lexicographic_priority(a, b, b_max);
-// }
 
 int evaluate_end_states(State &state, int player_id, int player_points, int opponent_points)
 {
@@ -1477,18 +1172,11 @@ float evaluate_state(State &state, int player_id)
         Snake &snake = get_snake(state, snake_id);
         Pos snake_head_pos = get_snake_head_pos(snake);
 
-        // TODO: Add maluses/bonuses about surviving
-
-        Pos closest;
-        int dist;
-        dist = lookup_initial_bfs_distance_to_closest_energy(state, snake_head_pos);
-        // dist = find_closest_energy_cell_manhattan(state, snake_head_pos, closest);
-        // dist = find_closest_energy_cell_bfs(state, snake_head_pos, closest);
-        // dist = find_closest_energy_cell_bfs_iterative(state, snake_head_pos, closest);
-        if (dist == -1)
+        BFSDistanceToEnergy closest_energy = lookup_initial_bfs_distance_to_closest_energy(state, snake_head_pos);
+        if (closest_energy.distance == -1)
             dist_sum += MAX_MAP_WIDTH + MAX_MAP_HEIGHT; // If no energy cell found, consider it very far
         else
-            dist_sum += dist;
+            dist_sum += closest_energy.distance;
 
         // Reconstruct body once for both loops below
         Pos body_cache[MAX_SNAKE_SIZE];
@@ -1582,61 +1270,6 @@ MoveSet choose_best_player_moveset(State &state, int player_id, MoveSet &previou
     return best_moveset;
 }
 
-int choose_best_snake_moves_time = 0;
-int choose_best_snake_moves_count = 0;
-MoveSet choose_best_snake_moves(State &state, int player_id)
-{
-    auto start_chrono = chrono::high_resolution_clock::now();
-
-    MoveSet best_snake_moves;
-    State next_state;
-
-    int snake_count = get_player_alive_snake_count(state, player_id);
-
-    for (int i = 0; i < snake_count; i++)
-    {
-        int snake_id = get_player_alive_snake_id(state, player_id, i);
-        Snake &snake = get_snake(state, snake_id);
-
-        Pos snake_moves[3];
-        int snake_move_count = generate_snake_moves(state, snake, snake_moves);
-
-        int best_move_evaluation = -100000;
-        Move best_snake_move = {};
-        for (int j = 0; j < snake_move_count; j++)
-        {
-            // Construct a moveset with only this move for this snake
-            MoveSet snake_moveset;
-            set_moveset_move_count(snake_moveset, 1);
-            Move &move = get_moveset_move(snake_moveset, 0);
-            set_move_snake_id(move, snake_id);
-            set_move_dst_pos(move, snake_moves[j]);
-
-            // Still include other player snake moves already selected, to not generate dump movesets
-            MoveSet turn_moveset = merge_movesets(best_snake_moves, snake_moveset);
-
-            memcpy(&next_state, &state, SIZE_OF_STATE);
-            apply_moveset(next_state, turn_moveset);
-
-            float evaluation = evaluate_state(next_state, player_id);
-
-            if (evaluation > best_move_evaluation)
-            {
-                best_move_evaluation = evaluation;
-                best_snake_move = move;
-            }
-        }
-
-        set_moveset_move(best_snake_moves, best_snake_move, i);
-        set_moveset_move_count(best_snake_moves, i + 1);
-    }
-
-    auto end_chrono = chrono::high_resolution_clock::now();
-    choose_best_snake_moves_time += chrono::duration_cast<chrono::microseconds>(end_chrono - start_chrono).count();
-    choose_best_snake_moves_count++;
-    return best_snake_moves;
-}
-
 void print_marks(State &state, MoveSet best_moveset)
 {
     for (int i = 0; i < get_moveset_move_count(best_moveset); i++)
@@ -1645,11 +1278,10 @@ void print_marks(State &state, MoveSet best_moveset)
         int snake_id = get_move_snake_id(move);
         Snake &snake = get_snake(state, snake_id);
 
-        Pos closest;
-        int dist = find_closest_energy_cell_bfs_iterative(state, get_snake_head_pos(snake), closest);
+        BFSDistanceToEnergy closest_energy = lookup_initial_bfs_distance_to_closest_energy(state, get_snake_head_pos(snake));
 
-        if (dist != -1)
-            cout << "MARK " << get_map_x(closest) << " " << get_map_y(closest) << ";";
+        if (closest_energy.distance != -1)
+            cout << "MARK " << get_map_x(closest_energy.energy_pos) << " " << get_map_y(closest_energy.energy_pos) << ";";
     }
 }
 
@@ -2080,10 +1712,6 @@ int main()
         if (turn == 0)
             create_lookup_tables(state);
 
-        // print_cells(state, "Turn beginning");
-        // print_map(state, "Turn beginning");
-        // print_map_bfs_distances(state);
-
         MoveSet best_moveset;
         try
         {
@@ -2133,10 +1761,6 @@ int main()
         fprintf(stderr, "\nchoose_best_player_moveset() - time : %d ys\n", choose_best_player_moveset_time);
         fprintf(stderr, "choose_best_player_moveset() - count : %d\n", choose_best_player_moveset_count);
         fprintf(stderr, "choose_best_player_moveset() - t/call: %f ys\n", choose_best_player_moveset_time / (float)choose_best_player_moveset_count);
-
-        fprintf(stderr, "\nchoose_best_snake_moves() - time : %d ys\n", choose_best_snake_moves_time);
-        fprintf(stderr, "choose_best_snake_moves() - count : %d\n", choose_best_snake_moves_count);
-        fprintf(stderr, "choose_best_snake_moves() - t/call: %f ys\n", choose_best_snake_moves_time / (float)choose_best_snake_moves_count);
 
         fprintf(stderr, "\ngenerate_player_movesets() - time : %d ys\n", generate_player_movesets_time);
         fprintf(stderr, "generate_player_movesets() - count : %d\n", generate_player_movesets_count);
