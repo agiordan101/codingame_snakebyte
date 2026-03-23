@@ -1485,8 +1485,7 @@ float evaluate_state(State &state, int player_id, Pos *snake_targets, bool loggi
     float reachable_energy_score = 0;
     float support_search_score = 0;
 
-    int ratio_between_score_dists = 50;
-    int ratio_between_scores = ratio_between_score_dists * ratio_between_score_dists;
+    int ratio_between_score_dists = 10;
 
     int snake_count = get_player_alive_snake_count(state, player_id);
     for (int i = 0; i < snake_count; i++)
@@ -1532,7 +1531,7 @@ float evaluate_state(State &state, int player_id, Pos *snake_targets, bool loggi
             // Find distance from head to this same energy
             int head_to_energy_dist = lookup_initial_bfs_distance_to_energy(snake_head_pos, energy_pos);
             if (head_to_energy_dist == -1)
-                head_to_energy_dist = MAX_WIDTH + MAX_HEIGHT;
+                continue;
 
             if (logging)
             {
@@ -1546,7 +1545,9 @@ float evaluate_state(State &state, int player_id, Pos *snake_targets, bool loggi
                 // Goal: Reduce the distance between reachable energy and the head, while looking for a best support point
                 int score = encode_lexicographic_priority(head_to_energy_dist, body_support_to_closest_energy_dist, ratio_between_score_dists);
                 // int score = head_to_energy_dist;
-                reachable_energy_score += score;
+                // reachable_energy_score += score;
+
+                reachable_energy_score += 1.0f / score;
 
                 snake_targets[i] = energy_pos;
                 if (logging)
@@ -1562,7 +1563,9 @@ float evaluate_state(State &state, int player_id, Pos *snake_targets, bool loggi
                 // int score = encode_lexicographic_priority(head_to_energy_dist, body_support_to_closest_energy_dist, ratio_between_score_dists);
                 // int score = body_support_to_closest_energy_dist;
                 // int score = head_to_energy_dist;
-                support_search_score += score;
+                // support_search_score += score;
+
+                support_search_score += 0.2f / score;
 
                 snake_targets[i] = snake_body_pos;
                 if (logging)
@@ -1586,12 +1589,12 @@ float evaluate_state(State &state, int player_id, Pos *snake_targets, bool loggi
     // }
 
     // If no reachable energy, set score to 0. Else increase the score if the energy is closer.
-    if (reachable_energy_score > 0)
-    reachable_energy_score = 1.0f / (1 + reachable_energy_score);
-    
+    // if (reachable_energy_score > 0)
+    //     reachable_energy_score = 1.0f / (1 + reachable_energy_score);
+
     // If no support search score, don't affect the score with this metric
-    if (support_search_score > 0)
-        support_search_score = 0.1f / (1 + support_search_score);
+    // if (support_search_score > 0)
+    //     support_search_score = 0.2f / (1 + support_search_score);
 
     if (logging)
     {
@@ -1874,7 +1877,7 @@ void find_candidates_among_state_children(State &state, int player_id, std::prio
         // if (next_state.turn == 250)
         Pos snake_targets[MAX_PLAYER_SNAKE_COUNT];
         next_state.state_evaluation = evaluate_state(next_state, player_id, snake_targets, false);
-        
+
         // if ((get_map_x(ally_movesets[i].moves[0].dst_pos) == 11 && get_map_y(ally_movesets[i].moves[0].dst_pos) == 9) || (get_map_x(ally_movesets[i].moves[1].dst_pos) == 11 && get_map_y(ally_movesets[i].moves[1].dst_pos) == 9))
         // if (state.turn == 1 && (get_map_x(state.snakes[2].head_pos) == 11 && get_map_y(state.snakes[2].head_pos) == 9))
         // {
@@ -2293,9 +2296,9 @@ int main()
         // fprintf(stderr, "bfs_recursive() - count : %d\n", bfs_recursive_count);
         // fprintf(stderr, "bfs_recursive() - t/call: %f ys\n", bfs_recursive_time / (float)bfs_recursive_count);
 
-        // fprintf(stderr, "\nevaluate_state() - time : %d ys\n", evaluate_state_time);
-        // fprintf(stderr, "evaluate_state() - count : %d\n", evaluate_state_count);
-        // fprintf(stderr, "evaluate_state() - t/call: %f ys\n", evaluate_state_time / (float)evaluate_state_count);
+        fprintf(stderr, "\nevaluate_state() - time : %d ys\n", evaluate_state_time);
+        fprintf(stderr, "evaluate_state() - count : %d\n", evaluate_state_count);
+        fprintf(stderr, "evaluate_state() - t/call: %f ys\n", evaluate_state_time / (float)evaluate_state_count);
 
         // fprintf(stderr, "\nmove_candidates_in_beam_states() - time : %d ys\n", move_candidates_in_beam_states_time);
         // fprintf(stderr, "move_candidates_in_beam_states() - count : %d\n", move_candidates_in_beam_states_count);
