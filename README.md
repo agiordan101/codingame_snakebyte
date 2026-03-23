@@ -63,6 +63,13 @@ sh create_arena.sh
 
 ## TODO
 
+- Version finale :
+    - Lever les compteurs
+    - Lever les logging
+    - Lever les exit(0)
+    - Lever les fonctions inutiles
+    - Lever le try catch
+
 - Alléger la data structure de State avec des int8 par exemple
 
     1. Bitboard pour les cells (gain ~800 bytes) ?
@@ -217,8 +224,8 @@ MoveSet -> A list of Move
 Don't generate move on platforms & Fix platform bonuses (was not working)
 
 League: Legend (max)
-First publication : 57/2277
-Last publication: 52/2277
+First publication : 30/2277
+Last publication: -
 
 # v5.9
 

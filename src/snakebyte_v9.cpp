@@ -1482,10 +1482,10 @@ float evaluate_state(State &state, int player_id, Pos *snake_targets, bool loggi
     if (is_game_ended(state))
         return evaluate_end_states(state, player_id, player_points, opponent_points);
 
-    int reachable_energy_score = 0;
-    int support_search_score = 0;
+    float reachable_energy_score = 0;
+    float support_search_score = 0;
 
-    int ratio_between_score_dists = MAX_WIDTH + MAX_HEIGHT;
+    int ratio_between_score_dists = 50;
     int ratio_between_scores = ratio_between_score_dists * ratio_between_score_dists;
 
     int snake_count = get_player_alive_snake_count(state, player_id);
@@ -1558,8 +1558,10 @@ float evaluate_state(State &state, int player_id, Pos *snake_targets, bool loggi
             {
                 // No energy are reachable from this body support
                 // Goal: Look for a better support point, while minimizing the distance between the head and the energy
-                int score = encode_lexicographic_priority(body_support_to_closest_energy_dist, head_to_energy_dist, ratio_between_score_dists);
+                // int score = encode_lexicographic_priority(body_support_to_closest_energy_dist, head_to_energy_dist, ratio_between_score_dists);
+                int score = encode_lexicographic_priority(head_to_energy_dist, body_support_to_closest_energy_dist, ratio_between_score_dists);
                 // int score = body_support_to_closest_energy_dist;
+                // int score = head_to_energy_dist;
                 support_search_score += score;
 
                 snake_targets[i] = snake_body_pos;
@@ -1575,7 +1577,7 @@ float evaluate_state(State &state, int player_id, Pos *snake_targets, bool loggi
         // TODO: Look for the closest support point that offer an accessible energy for this snake
     }
 
-    int lexicographic_result = encode_lexicographic_priority(reachable_energy_score, support_search_score, ratio_between_scores);
+    int lexicographic_result = encode_lexicographic_priority(support_search_score, reachable_energy_score, ratio_between_scores);
     float dist_score = 1.0f / (float)(1 + lexicographic_result);
 
     if (logging)
@@ -1583,10 +1585,19 @@ float evaluate_state(State &state, int player_id, Pos *snake_targets, bool loggi
         fprintf(stderr, "Reachable energy score: %d, Support search score: %d, Lexicographic result: %d, Dist score: %f\n", reachable_energy_score, support_search_score, lexicographic_result, dist_score);
     }
 
+    // reachable_energy_score = 1.0f / (1 + reachable_energy_score);
+    // support_search_score = 0.1f / (1 + support_search_score);
+
+    // if (logging)
+    // {
+    //     fprintf(stderr, "Reachable energy score: %d, Support search score: %d\n", reachable_energy_score, support_search_score);
+    // }
+
     auto end_chrono = chrono::high_resolution_clock::now();
     evaluate_state_time += chrono::duration_cast<chrono::microseconds>(end_chrono - start_chrono).count();
     evaluate_state_count++;
 
+    // return player_points - opponent_points + reachable_energy_score + support_search_score;
     return player_points - opponent_points + dist_score;
 }
 
@@ -1855,14 +1866,19 @@ void find_candidates_among_state_children(State &state, int player_id, std::prio
         next_state.heuristic_depth_weight = next_state_heuristic_weight;
 
         // Find state improvment
+        // if (next_state.turn == 250)
         Pos snake_targets[MAX_PLAYER_SNAKE_COUNT];
-        // if (get_map_x(ally_movesets[i].moves[2].dst_pos) == 2)
-        if (next_state.turn == 250)
-        {
-            next_state.state_evaluation = evaluate_state(next_state, player_id, snake_targets, true);
-        }
-        else
-            next_state.state_evaluation = evaluate_state(next_state, player_id, snake_targets, false);
+        next_state.state_evaluation = evaluate_state(next_state, player_id, snake_targets, false);
+        
+        // if ((get_map_x(ally_movesets[i].moves[0].dst_pos) == 11 && get_map_y(ally_movesets[i].moves[0].dst_pos) == 9) || (get_map_x(ally_movesets[i].moves[1].dst_pos) == 11 && get_map_y(ally_movesets[i].moves[1].dst_pos) == 9))
+        // if (state.turn == 1 && (get_map_x(state.snakes[2].head_pos) == 11 && get_map_y(state.snakes[2].head_pos) == 9))
+        // {
+        //     fprintf(stderr, "\n");
+        //     print_moveset(turn_moveset);
+        //     next_state.state_evaluation = evaluate_state(next_state, player_id, snake_targets, true);
+        // }
+        // else
+        //     next_state.state_evaluation = evaluate_state(next_state, player_id, snake_targets, false);
 
         // print_moveset(turn_moveset);
         // fprintf(stderr, "State evaluation = %f\n", next_state.state_evaluation);
@@ -2240,29 +2256,29 @@ int main()
         fprintf(stderr, "\nStates visited this turn: %d\n", beam_search_visited_states_count);
         fprintf(stderr, "Avg visited states: %d\n", (int)beam_search_average_states_visited);
 
-        fprintf(stderr, "\nchoose_best_player_moveset() - time : %d ys\n", choose_best_player_moveset_time);
-        fprintf(stderr, "choose_best_player_moveset() - count : %d\n", choose_best_player_moveset_count);
-        fprintf(stderr, "choose_best_player_moveset() - t/call: %f ys\n", choose_best_player_moveset_time / (float)choose_best_player_moveset_count);
+        // fprintf(stderr, "\nchoose_best_player_moveset() - time : %d ys\n", choose_best_player_moveset_time);
+        // fprintf(stderr, "choose_best_player_moveset() - count : %d\n", choose_best_player_moveset_count);
+        // fprintf(stderr, "choose_best_player_moveset() - t/call: %f ys\n", choose_best_player_moveset_time / (float)choose_best_player_moveset_count);
 
-        fprintf(stderr, "\nchoose_best_snake_moves() - time : %d ys\n", choose_best_snake_moves_time);
-        fprintf(stderr, "choose_best_snake_moves() - count : %d\n", choose_best_snake_moves_count);
-        fprintf(stderr, "choose_best_snake_moves() - t/call: %f ys\n", choose_best_snake_moves_time / (float)choose_best_snake_moves_count);
+        // fprintf(stderr, "\nchoose_best_snake_moves() - time : %d ys\n", choose_best_snake_moves_time);
+        // fprintf(stderr, "choose_best_snake_moves() - count : %d\n", choose_best_snake_moves_count);
+        // fprintf(stderr, "choose_best_snake_moves() - t/call: %f ys\n", choose_best_snake_moves_time / (float)choose_best_snake_moves_count);
 
-        fprintf(stderr, "\ngenerate_player_movesets() - time : %d ys\n", generate_player_movesets_time);
-        fprintf(stderr, "generate_player_movesets() - count : %d\n", generate_player_movesets_count);
-        fprintf(stderr, "generate_player_movesets() - t/call: %f ys\n", generate_player_movesets_time / (float)generate_player_movesets_count);
+        // fprintf(stderr, "\ngenerate_player_movesets() - time : %d ys\n", generate_player_movesets_time);
+        // fprintf(stderr, "generate_player_movesets() - count : %d\n", generate_player_movesets_count);
+        // fprintf(stderr, "generate_player_movesets() - t/call: %f ys\n", generate_player_movesets_time / (float)generate_player_movesets_count);
 
-        fprintf(stderr, "\nrevert_last_move() - time : %d ys\n", revert_last_move_time);
-        fprintf(stderr, "revert_last_move() - count : %d\n", revert_last_move_count);
-        fprintf(stderr, "revert_last_move() - t/call: %f ys\n", revert_last_move_time / (float)revert_last_move_count);
+        // fprintf(stderr, "\nrevert_last_move() - time : %d ys\n", revert_last_move_time);
+        // fprintf(stderr, "revert_last_move() - count : %d\n", revert_last_move_count);
+        // fprintf(stderr, "revert_last_move() - t/call: %f ys\n", revert_last_move_time / (float)revert_last_move_count);
 
-        fprintf(stderr, "\napply_moveset() - time : %d ys\n", apply_moveset_time);
-        fprintf(stderr, "apply_moveset() - count : %d\n", apply_moveset_count);
-        fprintf(stderr, "apply_moveset() - t/call: %f ys\n", apply_moveset_time / (float)apply_moveset_count);
+        // fprintf(stderr, "\napply_moveset() - time : %d ys\n", apply_moveset_time);
+        // fprintf(stderr, "apply_moveset() - count : %d\n", apply_moveset_count);
+        // fprintf(stderr, "apply_moveset() - t/call: %f ys\n", apply_moveset_time / (float)apply_moveset_count);
 
-        fprintf(stderr, "\napply_gravity() - time : %d ys\n", apply_gravity_time);
-        fprintf(stderr, "apply_gravity() - count : %d\n", apply_gravity_count);
-        fprintf(stderr, "apply_gravity() - t/call: %f ys\n", apply_gravity_time / (float)apply_gravity_count);
+        // fprintf(stderr, "\napply_gravity() - time : %d ys\n", apply_gravity_time);
+        // fprintf(stderr, "apply_gravity() - count : %d\n", apply_gravity_count);
+        // fprintf(stderr, "apply_gravity() - t/call: %f ys\n", apply_gravity_time / (float)apply_gravity_count);
 
         // fprintf(stderr, "\nbfs_iterative() - time : %d ys\n", bfs_iterative_time);
         // fprintf(stderr, "bfs_iterative() - count : %d\n", bfs_iterative_count);
@@ -2272,21 +2288,21 @@ int main()
         // fprintf(stderr, "bfs_recursive() - count : %d\n", bfs_recursive_count);
         // fprintf(stderr, "bfs_recursive() - t/call: %f ys\n", bfs_recursive_time / (float)bfs_recursive_count);
 
-        fprintf(stderr, "\nevaluate_state() - time : %d ys\n", evaluate_state_time);
-        fprintf(stderr, "evaluate_state() - count : %d\n", evaluate_state_count);
-        fprintf(stderr, "evaluate_state() - t/call: %f ys\n", evaluate_state_time / (float)evaluate_state_count);
+        // fprintf(stderr, "\nevaluate_state() - time : %d ys\n", evaluate_state_time);
+        // fprintf(stderr, "evaluate_state() - count : %d\n", evaluate_state_count);
+        // fprintf(stderr, "evaluate_state() - t/call: %f ys\n", evaluate_state_time / (float)evaluate_state_count);
 
-        fprintf(stderr, "\nmove_candidates_in_beam_states() - time : %d ys\n", move_candidates_in_beam_states_time);
-        fprintf(stderr, "move_candidates_in_beam_states() - count : %d\n", move_candidates_in_beam_states_count);
-        fprintf(stderr, "move_candidates_in_beam_states() - t/call: %f ys\n", move_candidates_in_beam_states_time / (float)move_candidates_in_beam_states_count);
+        // fprintf(stderr, "\nmove_candidates_in_beam_states() - time : %d ys\n", move_candidates_in_beam_states_time);
+        // fprintf(stderr, "move_candidates_in_beam_states() - count : %d\n", move_candidates_in_beam_states_count);
+        // fprintf(stderr, "move_candidates_in_beam_states() - t/call: %f ys\n", move_candidates_in_beam_states_time / (float)move_candidates_in_beam_states_count);
 
-        fprintf(stderr, "\nconsider_state_to_be_candidate() - time : %d ys\n", consider_state_to_be_candidate_time);
-        fprintf(stderr, "consider_state_to_be_candidate() - count : %d\n", consider_state_to_be_candidate_count);
-        fprintf(stderr, "consider_state_to_be_candidate() - t/call: %f ys\n", consider_state_to_be_candidate_time / (float)consider_state_to_be_candidate_count);
+        // fprintf(stderr, "\nconsider_state_to_be_candidate() - time : %d ys\n", consider_state_to_be_candidate_time);
+        // fprintf(stderr, "consider_state_to_be_candidate() - count : %d\n", consider_state_to_be_candidate_count);
+        // fprintf(stderr, "consider_state_to_be_candidate() - t/call: %f ys\n", consider_state_to_be_candidate_time / (float)consider_state_to_be_candidate_count);
 
-        fprintf(stderr, "\nfind_candidates_among_state_children() - time : %d ys\n", find_candidates_among_state_children_time);
-        fprintf(stderr, "find_candidates_among_state_children() - count : %d\n", find_candidates_among_state_children_count);
-        fprintf(stderr, "find_candidates_among_state_children() - t/call: %f ys\n", find_candidates_among_state_children_time / (float)find_candidates_among_state_children_count);
+        // fprintf(stderr, "\nfind_candidates_among_state_children() - time : %d ys\n", find_candidates_among_state_children_time);
+        // fprintf(stderr, "find_candidates_among_state_children() - count : %d\n", find_candidates_among_state_children_count);
+        // fprintf(stderr, "find_candidates_among_state_children() - t/call: %f ys\n", find_candidates_among_state_children_time / (float)find_candidates_among_state_children_count);
 
         for (int i = 0; i < get_moveset_move_count(best_moveset); i++)
         {

@@ -50,6 +50,11 @@
 //              & Refacto collision detection via la grille cells au lieu d'itérer les segments
 //              & Réduit la taille du Snake de 212 à 116 bytes.
 //          v5.9.1 - Pour que les snakes se spread: Ajouter la score à partir de la somme entre chaque énergie et leur snake le plus proche
+//                   & fix gravity signals
+//                   & fix collisions when one player only moved
+//      v5.10 - Remove energies pos from State : 2972 -> 2772 bytes
+//              & fix gravity signals
+//              & fix collisions when one player only moved
 //  v6 - Rework beam search state data structures : with 2 priority queues and 2 buffers alternating as beam states and beam candidates (Very bad due to cache misses)
 //  v7 - Rework beam search state data structures : Use 2 static state arrays and nth_element instead of vector and priority_queue
 //      v7.1 - Don't generate move on platforms
