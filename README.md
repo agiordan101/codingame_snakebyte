@@ -64,8 +64,8 @@ sh create_arena.sh
 ## TODO
 
 - Version finale :
-    - hyper paramètre au début
-    - Alléger la data structure de State avec des int8 par exemple
+    - Remove warnings
+    - Time merge_movesets and use memcpy
     - Retest de générer les moves d'inertie quand il n'y en as pas de valide
         - Faire attention lorsqu'un snake n'a aucun move :
             - Recroqueville sur lui même
@@ -164,6 +164,19 @@ MoveSet -> A list of Move
     - Move best 'beam_width' states from beam_search_candidates to beam_search_states
 
 ## History
+
+# rc-1
+
+- Finetuning BS width
+- Lever les logging
+- Lever les exit(0)
+- Lever les fonctions inutiles
+- Lever le try catch
+- hyper paramètre au début
+
+League: Legend (max)
+First publication : 42/2326
+Last publication: -
 
 # v9.3
 
