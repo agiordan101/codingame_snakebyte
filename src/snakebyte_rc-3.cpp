@@ -129,7 +129,7 @@ constexpr int DIR_ARRAY_SIZE = MAX_SNAKE_SIZE - 1; // 99 bytes for 99 directions
 constexpr int BS_MAX_TIME = 30000;
 constexpr int BS_MAX_DEPTH = 50;
 constexpr float BS_EXP_FACTOR = 0.99;
-constexpr int BS_WIDTH = 150;
+constexpr int BS_WIDTH = 160;
 constexpr int BS_MAX_CHILD_STATES = BS_WIDTH * MAX_PLAYER_MOVE_SETS;
 
 /* --- MAPPROPERTIES --- */

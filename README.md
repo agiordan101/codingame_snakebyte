@@ -1,6 +1,8 @@
 # codingame_snakebyte
 Winter Challenge 2026
 
+![alt text](image.png)
+
 ## Run commands
 
 To compete 2 bots (100 silver games with 4 threads) :
@@ -162,6 +164,15 @@ MoveSet -> A list of Move
 
 ## History
 
+# rc-3
+
+- Transform structs int to uint8
+- Remove chronos & warnings
+
+League: Legend (max)
+First publication : 34/2326
+Last publication: -
+
 # rc-1
 
 - Finetuning BS width
@@ -172,7 +183,7 @@ MoveSet -> A list of Move
 - hyper paramètre au début
 
 League: Legend (max)
-First publication : 42/2326
+First publication : 34/2326
 Last publication: -
 
 # v9.3
