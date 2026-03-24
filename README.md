@@ -1,6 +1,7 @@
 # codingame_snakebyte
 Winter Challenge 2026
 
+Bot 'rc-3' at the Challenge end :
 ![alt text](image.png)
 
 ## Run commands
@@ -170,7 +171,7 @@ MoveSet -> A list of Move
 - Remove chronos & warnings
 
 League: Legend (max)
-First publication : 34/2326
+First publication : 34/2357
 Last publication: -
 
 # rc-1
